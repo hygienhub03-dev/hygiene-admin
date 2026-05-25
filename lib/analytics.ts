@@ -1,4 +1,4 @@
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 // Analytics utility functions for the admin dashboard
 export interface SalesOverview {
@@ -38,7 +38,7 @@ export async function getSalesOverview(
   startDate?: string,
   endDate?: string
 ): Promise<SalesOverview> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createSupabaseBrowserClient();
 
   // Get total sales and order count
   let ordersQuery = supabase
@@ -87,7 +87,7 @@ export async function getSalesTrendData(
   endDate?: string,
   interval: 'day' | 'week' | 'month' = 'day'
 ): Promise<SalesTrendData[]> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createSupabaseBrowserClient();
 
   let query = supabase
     .from('orders')
@@ -136,7 +136,7 @@ export async function getSalesTrendData(
  * Get top performing products
  */
 export async function getTopProducts(limit: number = 10): Promise<ProductPerformance[]> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createSupabaseBrowserClient();
 
   // Get order items with product info
   const { data: orderItems } = await supabase
@@ -186,7 +186,7 @@ export async function getCustomerMetrics(
   startDate?: string,
   endDate?: string
 ): Promise<CustomerMetrics> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createSupabaseBrowserClient();
 
   // Get all orders to analyze customer behavior
   let query = supabase
@@ -239,7 +239,7 @@ export async function getInventoryTurnover(): Promise<{
   daysSalesOfInventory: number;
   grossMarginReturnOnInvestment: number;
 }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createSupabaseBrowserClient();
 
   // Get current inventory value
   const { data: products } = await supabase

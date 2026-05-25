@@ -1,7 +1,7 @@
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export async function getAllProducts() {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase
     .from('products')
     .select(`
@@ -29,7 +29,7 @@ export async function getAllProducts() {
 }
 
 export async function getProductById(id: string) {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase
     .from('products')
     .select(`
@@ -72,7 +72,7 @@ export async function getProductById(id: string) {
 }
 
 export async function updateProductStock(id: string, stock: number) {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase
     .from('products')
     .update({ stock })
