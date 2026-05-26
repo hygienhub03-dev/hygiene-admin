@@ -1,26 +1,54 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useSearchParams } from "next/navigation"
 import { Suspense } from "react"
 import { PageHeader } from "@/components/dashboard/page-header"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Search, Filter, ShoppingCart, Package, Truck, CheckCircle, Clock, XCircle } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Search, Filter, ShoppingCart, Package, Truck, CheckCircle, Clock, XCircle, ChevronDown } from "lucide-react"
 import { apiFetch } from "@/lib/api"
 import Loading from "./loading"
 
 interface OrderItem {
+  fullId: string
   id: string
   customer: string
   email: string
   items: number
   total: string
   status: string
+  rawStatus: string
   date: string
   payment: string
+}
+
+const STATUS_OPTIONS = [
+  { label: "Pending", raw: "waiting" },
+  { label: "Processing", raw: "processing" },
+  { label: "Shipped", raw: "shipped" },
+  { label: "Completed", raw: "delivered" },
+  { label: "Cancelled", raw: "cancelled" },
+]
+
+const capitalizeStatus = (s: string) => {
+  const map: Record<string, string> = {
+    waiting: "Pending",
+    processing: "Processing",
+    confirmed: "Processing",
+    shipped: "Shipped",
+    delivered: "Completed",
+    cancelled: "Cancelled",
+    returned: "Cancelled",
+  }
+  return map[s] || s.charAt(0).toUpperCase() + s.slice(1)
 }
 
 function OrdersContent() {
@@ -28,6 +56,7 @@ function OrdersContent() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
+  const [updatingId, setUpdatingId] = useState<string | null>(null)
 
   useEffect(() => {
     loadOrders()
@@ -39,12 +68,14 @@ function OrdersContent() {
       if (res.success) {
         const data = (res as any).data ?? []
         setOrders(data.map((o: any) => ({
+          fullId: o.id || "",
           id: o.id?.slice(0, 8).toUpperCase() || "N/A",
           customer: o.userEmail || "Unknown",
           email: o.userEmail || "",
           items: o.cartItems?.length || 0,
           total: `R${(o.totalAmount || 0).toFixed(2)}`,
           status: capitalizeStatus(o.orderStatus || "waiting"),
+          rawStatus: o.orderStatus || "waiting",
           date: o.orderDate ? new Date(o.orderDate).toLocaleDateString("en-ZA", { month: "short", day: "numeric", year: "numeric" }) : "N/A",
           payment: o.paymentMethod || "N/A",
         })))
@@ -56,17 +87,29 @@ function OrdersContent() {
     }
   }
 
-  const capitalizeStatus = (s: string) => {
-    const map: Record<string, string> = {
-      waiting: "Pending",
-      processing: "Processing",
-      confirmed: "Processing",
-      shipped: "Shipped",
-      delivered: "Completed",
-      cancelled: "Cancelled",
-      returned: "Cancelled",
+  const handleStatusChange = async (orderFullId: string, newRawStatus: string, newLabel: string) => {
+    setUpdatingId(orderFullId)
+    try {
+      const res = await apiFetch(`/api/orders/${orderFullId}`, {
+        method: "PUT",
+        body: { status: newRawStatus },
+      })
+      if (res.success) {
+        setOrders(prev =>
+          prev.map(o =>
+            o.fullId === orderFullId
+              ? { ...o, status: newLabel, rawStatus: newRawStatus }
+              : o
+          )
+        )
+      } else {
+        console.error("Failed to update order:", (res as any).message)
+      }
+    } catch (err) {
+      console.error("Failed to update order:", err)
+    } finally {
+      setUpdatingId(null)
     }
-    return map[s] || s.charAt(0).toUpperCase() + s.slice(1)
   }
 
   const filteredOrders = orders.filter((order) => {
@@ -77,7 +120,6 @@ function OrdersContent() {
     return matchesSearch && matchesStatus
   })
 
-  // Compute stats
   const totalOrders = orders.length
   const processing = orders.filter(o => o.status === "Processing").length
   const shipped = orders.filter(o => o.status === "Shipped").length
@@ -218,7 +260,7 @@ function OrdersContent() {
                     </tr>
                   ) : (
                     filteredOrders.map((order) => (
-                      <tr key={order.id} className="border-b border-border hover:bg-muted/50">
+                      <tr key={order.fullId} className="border-b border-border hover:bg-muted/50">
                         <td className="py-3 px-4 font-medium">{order.id}</td>
                         <td className="py-3 px-4">
                           <div>
@@ -229,10 +271,38 @@ function OrdersContent() {
                         <td className="py-3 px-4">{order.items}</td>
                         <td className="py-3 px-4 font-medium">{order.total}</td>
                         <td className="py-3 px-4">
-                          <Badge className={`${getStatusColor(order.status)} flex items-center gap-1 w-fit`}>
-                            {getStatusIcon(order.status)}
-                            {order.status}
-                          </Badge>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                disabled={updatingId === order.fullId}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity disabled:opacity-50 ${getStatusColor(order.status)}`}
+                              >
+                                {updatingId === order.fullId ? (
+                                  <div className="w-3 h-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                                ) : (
+                                  getStatusIcon(order.status)
+                                )}
+                                {order.status}
+                                <ChevronDown className="w-3 h-3 ml-0.5" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                              {STATUS_OPTIONS.map((opt) => (
+                                <DropdownMenuItem
+                                  key={opt.raw}
+                                  disabled={order.rawStatus === opt.raw}
+                                  onClick={() => handleStatusChange(order.fullId, opt.raw, opt.label)}
+                                  className={order.rawStatus === opt.raw ? "font-semibold" : ""}
+                                >
+                                  <span className={`inline-flex items-center gap-1.5 ${order.rawStatus === opt.raw ? "text-foreground" : ""}`}>
+                                    {getStatusIcon(opt.label)}
+                                    {opt.label}
+                                    {order.rawStatus === opt.raw && <span className="text-xs text-muted-foreground ml-1">(current)</span>}
+                                  </span>
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </td>
                         <td className="py-3 px-4 text-muted-foreground">{order.date}</td>
                         <td className="py-3 px-4 text-muted-foreground">{order.payment}</td>
