@@ -13,8 +13,7 @@ export async function getAllOrders() {
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-  
-  // Transform data to match the expected format
+
   return data?.map(order => ({
     userId: order.user_id,
     totalAmount: order.total_amount,

@@ -2,14 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { requireAdminForApi } from "@/lib/admin-auth";
 import { allowedUploadMime, MAX_UPLOAD_BYTES } from "@/lib/api-validation";
-import { enforceRateLimit, enforceTrustedOrigin } from "@/lib/route-security";
+import { enforceRateLimit } from "@/lib/route-security";
 
 export async function POST(req: NextRequest) {
   const authError = await requireAdminForApi(req);
   if (authError) return authError;
-  const originError = enforceTrustedOrigin(req);
-  if (originError) return originError;
-  const rateLimitError = enforceRateLimit(req, "products:upload", 20, 60_000);
+  const rateLimitError = enforceRateLimit(req, "products:upload", 30, 60_000);
   if (rateLimitError) return rateLimitError;
 
   try {
@@ -25,14 +23,14 @@ export async function POST(req: NextRequest) {
 
     if (!allowedUploadMime.has(file.type)) {
       return NextResponse.json(
-        { success: false, message: "Invalid file type" },
+        { success: false, message: "Invalid file type. Allowed: JPEG, PNG, WebP, GIF" },
         { status: 400 },
       );
     }
 
     if (file.size > MAX_UPLOAD_BYTES) {
       return NextResponse.json(
-        { success: false, message: "File is too large (max 5MB)" },
+        { success: false, message: "File too large (max 5MB)" },
         { status: 400 },
       );
     }
@@ -48,28 +46,28 @@ export async function POST(req: NextRequest) {
       },
     );
 
-    const fileBuffer = await file.arrayBuffer();
-    const fileName = `${crypto.randomUUID()}-${file.name}`;
+    const ext = file.name.split('.').pop() || 'jpg';
+    const path = `products/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
+    const arrayBuffer = await file.arrayBuffer();
     const { data, error } = await supabase.storage
       .from('product-images')
-      .upload(fileName, fileBuffer, {
+      .upload(path, arrayBuffer, {
         contentType: file.type,
-        cacheControl: '3600',
         upsert: false,
       });
 
     if (error) throw error;
 
-    const { data: { publicUrl } } = supabase.storage
+    const { data: urlData } = supabase.storage
       .from('product-images')
-      .getPublicUrl(fileName);
+      .getPublicUrl(data.path);
 
-    return NextResponse.json({ success: true, url: publicUrl });
+    return NextResponse.json({ success: true, url: urlData.publicUrl });
   } catch (error: any) {
     console.error("[POST /api/products/upload]", error);
     return NextResponse.json(
-      { success: false, message: error?.message ?? "Image upload failed" },
+      { success: false, message: error?.message ?? "Upload failed" },
       { status: 500 },
     );
   }

@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireAdminForApi } from "@/lib/admin-auth";
-import { sendEmailAsService } from "@/lib/supabase/edge-functions";
-import { shippingUpdateEmail } from "@/lib/emails/templates";
 
 const ORDER_STATUSES = new Set([
   "waiting",
@@ -96,28 +94,6 @@ export async function PUT(
         shipment_status: shipmentStatus ?? data.shipment_status,
         note: body.note ?? "Status updated by admin",
       });
-
-      // Send shipping update email
-      if (data.user_email && shipmentStatus) {
-        try {
-          await sendEmailAsService({
-            to: data.user_email,
-            subject: `Order Update - #${id.slice(0, 8)}`,
-            html: shippingUpdateEmail({
-              id,
-              customerName: data.user_name || 'Customer',
-              carrier: data.carrier,
-              trackingNumber: data.tracking_number,
-              status: shipmentStatus === 'shipped' ? 'Your order has been shipped!' :
-                      shipmentStatus === 'delivered' ? 'Your order has been delivered!' :
-                      shipmentStatus === 'out_for_delivery' ? 'Your order is out for delivery!' :
-                      `Order status: ${shipmentStatus}`,
-            }),
-          });
-        } catch (e) {
-          console.error("Failed to send shipping update email:", e);
-        }
-      }
     }
 
     return NextResponse.json({ success: true, data: mapOrder(data) });

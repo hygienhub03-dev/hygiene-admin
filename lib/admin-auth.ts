@@ -12,9 +12,7 @@ export async function requireAdminForApi(
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet) {
-          // Can't set cookies in requireAdminForApi easily
-        },
+        setAll() {},
       },
     },
   );
@@ -42,32 +40,4 @@ export async function requireAdminForApi(
   }
 
   return null;
-}
-
-export async function checkAdminFromRequest(
-  request: NextRequest,
-): Promise<boolean> {
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll() {},
-      },
-    },
-  );
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return false;
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-
-  return profile?.role === 'admin';
 }

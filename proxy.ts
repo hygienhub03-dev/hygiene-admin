@@ -35,8 +35,10 @@ export default async function proxy(req: NextRequest) {
 
   const { data: { user }, error } = await supabase.auth.getUser();
 
-  const isPublicRoute = req.nextUrl.pathname.startsWith('/sign-in') ||
-                        req.nextUrl.pathname.startsWith('/sign-up') ||
+  const isPublicRoute = req.nextUrl.pathname.startsWith('/login') ||
+                        req.nextUrl.pathname.startsWith('/signup') ||
+                        req.nextUrl.pathname.startsWith('/forgot-password') ||
+                        req.nextUrl.pathname.startsWith('/email-confirmation') ||
                         req.nextUrl.pathname.startsWith('/api/auth') ||
                         req.nextUrl.pathname.startsWith('/_next') ||
                         req.nextUrl.pathname.startsWith('/static') ||
@@ -47,23 +49,27 @@ export default async function proxy(req: NextRequest) {
   }
 
   if (error || !user) {
-    const signInUrl = new URL('/sign-in', req.url);
+    const signInUrl = new URL('/login', req.url);
     return NextResponse.redirect(signInUrl);
   }
 
-  // Check admin role for admin/dashboard routes
+  // Check admin role for dashboard routes
   const { data: profile } = await supabase
     .from('profiles')
     .select('role')
     .eq('id', user.id)
     .single();
 
-  const isAdminRoute = req.nextUrl.pathname.startsWith('/admin') ||
-                      req.nextUrl.pathname.startsWith('/dashboard') ||
-                      req.nextUrl.pathname.startsWith('/inventory');
+  const isAdminRoute = req.nextUrl.pathname === '/' ||
+                      req.nextUrl.pathname.startsWith('/products') ||
+                      req.nextUrl.pathname.startsWith('/orders') ||
+                      req.nextUrl.pathname.startsWith('/customers') ||
+                      req.nextUrl.pathname.startsWith('/sales') ||
+                      req.nextUrl.pathname.startsWith('/reports') ||
+                      req.nextUrl.pathname.startsWith('/profile');
 
   if (isAdminRoute && profile?.role !== 'admin') {
-    return NextResponse.redirect(new URL('/sign-in', req.url));
+    return NextResponse.redirect(new URL('/login', req.url));
   }
 
   return response;

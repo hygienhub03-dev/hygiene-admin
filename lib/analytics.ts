@@ -1,6 +1,5 @@
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
-// Analytics utility functions for the admin dashboard
 export interface SalesOverview {
   totalSales: number;
   totalOrders: number;
@@ -31,16 +30,12 @@ export interface CustomerMetrics {
   customerLifetimeValue: number;
 }
 
-/**
- * Get sales overview statistics
- */
 export async function getSalesOverview(
   startDate?: string,
   endDate?: string
 ): Promise<SalesOverview> {
   const supabase = createSupabaseBrowserClient();
 
-  // Get total sales and order count
   let ordersQuery = supabase
     .from('orders')
     .select('total_amount, user_id, created_at')
@@ -55,10 +50,8 @@ export async function getSalesOverview(
   const totalOrders = orders?.length || 0;
   const averageOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
 
-  // Get unique customers
   const uniqueCustomers = new Set(orders?.map((o: any) => o.user_id).filter(Boolean));
 
-  // Calculate growth rate (compare last 30 days vs previous 30 days)
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString();
@@ -79,9 +72,6 @@ export async function getSalesOverview(
   };
 }
 
-/**
- * Get sales trend data for charts
- */
 export async function getSalesTrendData(
   startDate?: string,
   endDate?: string,
@@ -102,7 +92,6 @@ export async function getSalesTrendData(
 
   if (!orders || orders.length === 0) return [];
 
-  // Group by interval
   const grouped = new Map<string, { sales: number; orders: number }>();
 
   for (const order of orders as any[]) {
@@ -132,13 +121,9 @@ export async function getSalesTrendData(
   }));
 }
 
-/**
- * Get top performing products
- */
 export async function getTopProducts(limit: number = 10): Promise<ProductPerformance[]> {
   const supabase = createSupabaseBrowserClient();
 
-  // Get order items with product info
   const { data: orderItems } = await supabase
     .from('order_items')
     .select(`
@@ -150,7 +135,6 @@ export async function getTopProducts(limit: number = 10): Promise<ProductPerform
 
   if (!orderItems) return [];
 
-  // Aggregate by product
   const productMap = new Map<string, { name: string; slug: string; totalSold: number; totalRevenue: number; averageRating: number }>();
 
   for (const item of orderItems as any[]) {
@@ -179,16 +163,12 @@ export async function getTopProducts(limit: number = 10): Promise<ProductPerform
     }));
 }
 
-/**
- * Get customer metrics
- */
 export async function getCustomerMetrics(
   startDate?: string,
   endDate?: string
 ): Promise<CustomerMetrics> {
   const supabase = createSupabaseBrowserClient();
 
-  // Get all orders to analyze customer behavior
   let query = supabase
     .from('orders')
     .select('user_id, total_amount, created_at')
@@ -203,7 +183,6 @@ export async function getCustomerMetrics(
     return { totalCustomers: 0, newCustomers: 0, returningCustomers: 0, customerLifetimeValue: 0 };
   }
 
-  // Count orders per customer
   const customerOrders = new Map<string, { count: number; totalSpent: number; firstOrder: string }>();
 
   for (const order of orders as any[]) {
@@ -228,46 +207,5 @@ export async function getCustomerMetrics(
     newCustomers,
     returningCustomers,
     customerLifetimeValue: Math.round(customerLifetimeValue * 100) / 100
-  };
-}
-
-/**
- * Get inventory turnover metrics
- */
-export async function getInventoryTurnover(): Promise<{
-  inventoryTurnoverRatio: number;
-  daysSalesOfInventory: number;
-  grossMarginReturnOnInvestment: number;
-}> {
-  const supabase = createSupabaseBrowserClient();
-
-  // Get current inventory value
-  const { data: products } = await supabase
-    .from('products')
-    .select('stock, price');
-
-  const totalInventoryValue = (products as any[])?.reduce(
-    (sum: number, p: any) => sum + (p.stock || 0) * (Number(p.price) || 0), 0
-  ) || 0;
-
-  // Get last 30 days sales
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const { data: recentItems } = await supabase
-    .from('order_items')
-    .select('quantity, unit_price')
-    .gte('created_at', thirtyDaysAgo);
-
-  const costOfGoodsSold = (recentItems as any[])?.reduce(
-    (sum: number, item: any) => sum + (Number(item.unit_price) || 0) * (item.quantity || 0), 0
-  ) || 0;
-
-  const annualizedCOGS = costOfGoodsSold * 12; // Approximate annual from monthly
-  const inventoryTurnoverRatio = totalInventoryValue > 0 ? annualizedCOGS / totalInventoryValue : 0;
-  const daysSalesOfInventory = inventoryTurnoverRatio > 0 ? 365 / inventoryTurnoverRatio : 0;
-
-  return {
-    inventoryTurnoverRatio: Math.round(inventoryTurnoverRatio * 100) / 100,
-    daysSalesOfInventory: Math.round(daysSalesOfInventory),
-    grossMarginReturnOnInvestment: 0 // Requires cost data not in schema
   };
 }

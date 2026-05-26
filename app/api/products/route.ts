@@ -35,7 +35,32 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, data });
+    // Fetch sales data per product
+    const { data: orderItems } = await supabase
+      .from('order_items')
+      .select('product_id, quantity, unit_price');
+
+    const salesMap = new Map<string, { unitsSold: number; revenue: number }>();
+    if (orderItems) {
+      for (const item of orderItems as any[]) {
+        const existing = salesMap.get(item.product_id) || { unitsSold: 0, revenue: 0 };
+        existing.unitsSold += item.quantity || 0;
+        existing.revenue += (Number(item.unit_price) || 0) * (item.quantity || 0);
+        salesMap.set(item.product_id, existing);
+      }
+    }
+
+    // Attach sales data to products
+    const enriched = (data || []).map((product: any) => {
+      const sales = salesMap.get(product.id) || { unitsSold: 0, revenue: 0 };
+      return {
+        ...product,
+        unitsSold: sales.unitsSold,
+        revenue: Math.round(sales.revenue * 100) / 100,
+      };
+    });
+
+    return NextResponse.json({ success: true, data: enriched });
   } catch (error: any) {
     console.error("[GET /api/products]", error);
     return NextResponse.json(
@@ -88,7 +113,7 @@ export async function POST(req: NextRequest) {
         .select('id')
         .eq('name', body.category)
         .single();
-      
+
       if (catData) {
         categoryId = catData.id;
       } else {

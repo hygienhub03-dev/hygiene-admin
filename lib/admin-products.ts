@@ -1,5 +1,3 @@
-// Admin product operations through local Next.js API routes (Supabase-backed).
-
 import { apiFetch } from "@/lib/api";
 
 export interface ProductDoc {
@@ -13,22 +11,40 @@ export interface ProductDoc {
   salePrice: number;
   totalStock: number;
   averageReview: number;
+  unitsSold: number;
+  revenue: number;
   createdAt?: string;
   updatedAt?: string;
 }
 
 function mapProduct(doc: Record<string, any>): ProductDoc {
+  // Extract image from images array or image field
+  let image = doc.image ?? "";
+  if (!image && Array.isArray(doc.images) && doc.images.length > 0) {
+    image = doc.images[0]?.url ?? "";
+  }
+  if (!image && Array.isArray(doc.image_urls) && doc.image_urls.length > 0) {
+    image = doc.image_urls[0] ?? "";
+  }
+
+  // Extract category name from nested object or string
+  const category = typeof doc.category === "object"
+    ? (doc.category?.name ?? "")
+    : (doc.category ?? "");
+
   return {
     id: doc.id ?? doc.$id ?? "",
-    image: doc.image ?? "",
+    image,
     title: doc.title ?? doc.name ?? "",
     description: doc.description ?? "",
-    category: doc.category ?? "",
+    category,
     brand: doc.brand ?? "",
-    price: doc.price ?? 0,
-    salePrice: doc.salePrice ?? 0,
+    price: Number(doc.price) ?? 0,
+    salePrice: Number(doc.salePrice ?? doc.sale_price) ?? 0,
     totalStock: doc.totalStock ?? doc.stock ?? 0,
-    averageReview: doc.averageReview ?? 0,
+    averageReview: doc.averageReview ?? doc.average_review ?? 0,
+    unitsSold: doc.unitsSold ?? 0,
+    revenue: doc.revenue ?? 0,
     createdAt: doc.createdAt ?? doc.created_at,
     updatedAt: doc.updatedAt ?? doc.updated_at,
   };

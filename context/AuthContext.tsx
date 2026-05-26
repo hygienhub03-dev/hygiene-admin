@@ -20,7 +20,9 @@ interface AuthContextType {
   session: Session | null;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, metadata?: Record<string, any>) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
+  updateProfile: (updates: Partial<UserProfile>) => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -65,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
-      
+
       if (session?.user) {
         supabase
           .from('profiles')
@@ -85,13 +87,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     if (!supabase) return { error: new Error('Supabase not configured') };
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    return { error };
+  };
+
+  const signUp = async (email: string, password: string, metadata?: Record<string, any>) => {
+    if (!supabase) return { error: new Error('Supabase not configured') };
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        data: metadata,
+      },
+    });
     return { error };
   };
 
   const signOut = async () => {
     if (!supabase) return;
     await supabase.auth.signOut();
+  };
+
+  const updateProfile = async (updates: Partial<UserProfile>) => {
+    if (!supabase || !user) return { error: new Error('Not authenticated') };
+    const { error } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('id', user.id);
+
+    if (!error) {
+      setProfile(prev => prev ? { ...prev, ...updates } : null);
+    }
+    return { error };
   };
 
   return (
@@ -102,7 +130,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         isLoading,
         signIn,
+        signUp,
         signOut,
+        updateProfile,
       }}
     >
       {children}

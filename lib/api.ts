@@ -8,12 +8,6 @@ function getBaseUrl() {
   return "";
 }
 
-/**
- * apiFetch - calls this app's local Next.js API routes.
- *
- * Pass a `getToken` function to authenticate requests with a Bearer token.
- * With Supabase, use `supabase.auth.getSession()` to get the access token.
- */
 export async function apiFetch<T extends object>(
   path: string,
   init: Omit<RequestInit, "body"> & { body?: unknown } = {},
@@ -28,7 +22,6 @@ export async function apiFetch<T extends object>(
     headers.set("Content-Type", "application/json");
   }
 
-  // Attach session JWT as Bearer token
   if (getToken) {
     const token = await getToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -53,56 +46,6 @@ export async function apiFetch<T extends object>(
   } catch {
     json = {};
   }
-
-  if (!res.ok) {
-    const msg =
-      typeof (json as any)?.message === "string"
-        ? (json as any).message
-        : `Request failed (${res.status})`;
-    return { success: false, message: msg };
-  }
-
-  return (json as ApiResponse<T>) ?? ({ success: true } as ApiOk<T>);
-}
-
-/**
- * localFetch — calls Next.js API routes on the same origin.
- * Pass a `getToken` function to authenticate requests with a Bearer token.
- */
-export async function localFetch<T extends object>(
-  path: string,
-  init: Omit<RequestInit, "body"> & { body?: unknown } = {},
-  getToken?: (() => Promise<string | null>) | null,
-): Promise<ApiResponse<T>> {
-  const url = path.startsWith("/") ? path : `/${path}`;
-
-  const headers = new Headers(init.headers);
-  const isFormData =
-    typeof FormData !== "undefined" && init.body instanceof FormData;
-  if (init.body !== undefined && !isFormData && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-
-  if (getToken) {
-    const token = await getToken();
-    if (token) headers.set("Authorization", `Bearer ${token}`);
-  }
-
-  const res = await fetch(url, {
-    ...init,
-    headers,
-    credentials: "include",
-    body:
-      init.body === undefined
-        ? undefined
-        : isFormData
-          ? (init.body as FormData)
-          : JSON.stringify(init.body),
-  });
-
-  const text = await res.text();
-  let json: unknown;
-  try { json = text ? JSON.parse(text) : {}; } catch { json = {}; }
 
   if (!res.ok) {
     const msg =
