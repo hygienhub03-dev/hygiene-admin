@@ -126,10 +126,20 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Generate unique slug from title
+    const slug = body.title
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      + "-" + Date.now().toString(36);
+
     const { data: product, error } = await supabase
       .from('products')
       .insert({
         name: body.title,
+        slug,
         description: body.description,
         price: body.price,
         category_id: categoryId,

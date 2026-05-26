@@ -132,38 +132,56 @@ export default function ProfilePage() {
     loadActivity()
   }, [user])
 
+  const [avatarKey, setAvatarKey] = useState(0)
+
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || !user) return
 
     setIsUploadingAvatar(true)
+    setSaveMessage("")
     try {
       const supabase = createSupabaseBrowserClient()
 
       // Upload to Supabase Storage
       const ext = file.name.split(".").pop() || "jpg"
-      const path = `avatars/${user.id}-${Date.now()}.${ext}`
+      const path = `${user.id}-${Date.now()}.${ext}`
 
-      const { error: uploadError } = await supabase.storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(path, file, { upsert: true })
+        .upload(path, file, { contentType: file.type, upsert: true })
 
-      if (uploadError) throw uploadError
+      if (uploadError) {
+        console.error("Avatar upload error:", uploadError)
+        setSaveMessage(`Upload failed: ${uploadError.message}`)
+        setTimeout(() => setSaveMessage(""), 5000)
+        return
+      }
 
-      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path)
+      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(uploadData.path)
       const avatarUrl = urlData.publicUrl
 
       // Update profile with new avatar URL
       const { error: updateError } = await updateProfile({ avatar_url: avatarUrl })
-      if (updateError) throw updateError
+      if (updateError) {
+        console.error("Profile update error:", updateError)
+        setSaveMessage(`Upload succeeded but profile update failed: ${updateError.message || updateError}`)
+        setTimeout(() => setSaveMessage(""), 5000)
+        return
+      }
 
+      // Force avatar image to re-render with cache bust
+      setAvatarKey(prev => prev + 1)
       setSaveMessage("Avatar updated!")
       setTimeout(() => setSaveMessage(""), 3000)
     } catch (err: any) {
-      setSaveMessage("Failed to upload avatar")
-      setTimeout(() => setSaveMessage(""), 3000)
+      console.error("Avatar upload exception:", err)
+      setSaveMessage(`Error: ${err?.message || "Unknown error"}`)
+      setTimeout(() => setSaveMessage(""), 5000)
     } finally {
       setIsUploadingAvatar(false)
+      // Reset file input so same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = ""
     }
   }
 
@@ -252,8 +270,8 @@ export default function ProfilePage() {
           <CardContent className="p-6">
             <div className="flex flex-col items-center text-center">
               <div className="relative mb-4">
-                <Avatar className="h-24 w-24">
-                  <AvatarImage src={profile?.avatar_url || "/professional-man-avatar.png"} />
+                <Avatar className="h-24 w-24" key={avatarKey}>
+                  <AvatarImage src={profile?.avatar_url ? `${profile.avatar_url}?t=${avatarKey}` : "/professional-man-avatar.png"} />
                   <AvatarFallback className="text-2xl">{initials}</AvatarFallback>
                 </Avatar>
                 <button
