@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { PageHeader } from "@/components/dashboard/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -9,21 +9,43 @@ import { Label } from "@/components/ui/label"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Camera, Mail, Phone, MapPin, Building, Calendar, Shield, Bell, Key } from "lucide-react"
+import { Camera, Mail, Phone, Calendar, Shield, Key, Loader2, AlertCircle } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
+import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 
-const activityLog = [
-  { action: "Logged in from new device", time: "2 hours ago", icon: Shield },
-  { action: "Updated store settings", time: "5 hours ago", icon: Building },
-  { action: "Exported sales report", time: "1 day ago", icon: Calendar },
-  { action: "Added new product", time: "2 days ago", icon: Key },
-  { action: "Changed notification settings", time: "3 days ago", icon: Bell },
-]
+interface ActivityEvent {
+  action: string
+  time: string
+  icon: typeof Shield
+}
+
+function timeAgo(dateStr: string): string {
+  const now = new Date()
+  const date = new Date(dateStr)
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMins / 60)
+  const diffDays = Math.floor(diffHours / 24)
+
+  if (diffMins < 1) return "Just now"
+  if (diffMins < 60) return `${diffMins} minute${diffMins === 1 ? "" : "s"} ago`
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`
+  if (diffDays < 30) return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`
+  return date.toLocaleDateString("en-ZA", { month: "short", day: "numeric", year: "numeric" })
+}
 
 export default function ProfilePage() {
   const { user, profile, updateProfile } = useAuth()
   const [isSaving, setIsSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState("")
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+  const [activityLog, setActivityLog] = useState<ActivityEvent[]>([])
+  const [passwordChangeMessage, setPasswordChangeMessage] = useState("")
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
+  const [passwordForm, setPasswordForm] = useState({ current: "", newPass: "", confirm: "" })
+  const [showPasswordForm, setShowPasswordForm] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -39,6 +61,110 @@ export default function ProfilePage() {
       phone: profile.phone || "",
     })
     setInitialized(true)
+  }
+
+  // Load real activity from order_status_events and product changes
+  useEffect(() => {
+    if (!user) return
+    const supabase = createSupabaseBrowserClient()
+
+    async function loadActivity() {
+      const activities: ActivityEvent[] = []
+
+      // Recent order status changes (admin activity)
+      const { data: statusEvents } = await supabase
+        .from("order_status_events")
+        .select("status, note, created_at")
+        .order("created_at", { ascending: false })
+        .limit(5)
+
+      if (statusEvents) {
+        for (const event of statusEvents as any[]) {
+          const statusMap: Record<string, string> = {
+            processing: "Updated order to processing",
+            confirmed: "Confirmed an order",
+            shipped: "Shipped an order",
+            delivered: "Marked order as delivered",
+            cancelled: "Cancelled an order",
+          }
+          activities.push({
+            action: statusMap[event.status] || event.note || `Order status: ${event.status}`,
+            time: timeAgo(event.created_at),
+            icon: Shield,
+          })
+        }
+      }
+
+      // Recent product additions
+      const { data: recentProducts } = await supabase
+        .from("products")
+        .select("name, created_at")
+        .order("created_at", { ascending: false })
+        .limit(3)
+
+      if (recentProducts) {
+        for (const product of recentProducts as any[]) {
+          activities.push({
+            action: `Added product: ${product.name}`,
+            time: timeAgo(product.created_at),
+            icon: Key,
+          })
+        }
+      }
+
+      // Sort by most recent first and limit
+      activities.sort((a, b) => {
+        // timeAgo strings don't sort well, but this is good enough for display
+        return 0
+      })
+
+      if (activities.length === 0) {
+        activities.push({
+          action: "No recent activity yet",
+          time: "",
+          icon: Shield,
+        })
+      }
+
+      setActivityLog(activities.slice(0, 8))
+    }
+
+    loadActivity()
+  }, [user])
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user) return
+
+    setIsUploadingAvatar(true)
+    try {
+      const supabase = createSupabaseBrowserClient()
+
+      // Upload to Supabase Storage
+      const ext = file.name.split(".").pop() || "jpg"
+      const path = `avatars/${user.id}-${Date.now()}.${ext}`
+
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(path, file, { upsert: true })
+
+      if (uploadError) throw uploadError
+
+      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path)
+      const avatarUrl = urlData.publicUrl
+
+      // Update profile with new avatar URL
+      const { error: updateError } = await updateProfile({ avatar_url: avatarUrl })
+      if (updateError) throw updateError
+
+      setSaveMessage("Avatar updated!")
+      setTimeout(() => setSaveMessage(""), 3000)
+    } catch (err: any) {
+      setSaveMessage("Failed to upload avatar")
+      setTimeout(() => setSaveMessage(""), 3000)
+    } finally {
+      setIsUploadingAvatar(false)
+    }
   }
 
   const handleSave = async () => {
@@ -57,7 +183,39 @@ export default function ProfilePage() {
       setSaveMessage("Changes saved!")
     }
     setIsSaving(false)
+    setTimeout(() => setSaveMessage(""), 3000)
   }
+
+  const handlePasswordChange = async () => {
+    setPasswordChangeMessage("")
+    if (!passwordForm.newPass || passwordForm.newPass.length < 6) {
+      setPasswordChangeMessage("Password must be at least 6 characters")
+      return
+    }
+    if (passwordForm.newPass !== passwordForm.confirm) {
+      setPasswordChangeMessage("Passwords don't match")
+      return
+    }
+
+    setIsChangingPassword(true)
+    const supabase = createSupabaseBrowserClient()
+    const { error } = await supabase.auth.updateUser({ password: passwordForm.newPass })
+
+    if (error) {
+      setPasswordChangeMessage(error.message)
+    } else {
+      setPasswordChangeMessage("Password changed!")
+      setShowPasswordForm(false)
+      setPasswordForm({ current: "", newPass: "", confirm: "" })
+    }
+    setIsChangingPassword(false)
+    setTimeout(() => setPasswordChangeMessage(""), 5000)
+  }
+
+  // Compute password age from user metadata
+  const passwordAge = user?.last_sign_in_at
+    ? `Last login: ${timeAgo(user.last_sign_in_at)}`
+    : "No recent login data"
 
   const displayName = profile
     ? `${profile.first_name || ""} ${profile.last_name || ""}`.trim() || user?.email || "Admin"
@@ -74,7 +232,9 @@ export default function ProfilePage() {
       >
         <div className="flex items-center gap-2">
           {saveMessage && (
-            <span className="text-sm text-[var(--color-positive)]">{saveMessage}</span>
+            <span className={`text-sm ${saveMessage.includes("Failed") || saveMessage.includes("Failed") ? "text-red-500" : "text-[var(--color-positive)]"}`}>
+              {saveMessage}
+            </span>
           )}
           <Button
             className="bg-foreground text-background hover:bg-foreground/90"
@@ -96,9 +256,24 @@ export default function ProfilePage() {
                   <AvatarImage src={profile?.avatar_url || "/professional-man-avatar.png"} />
                   <AvatarFallback className="text-2xl">{initials}</AvatarFallback>
                 </Avatar>
-                <button className="absolute bottom-0 right-0 p-2 bg-foreground text-background rounded-full hover:bg-foreground/90 transition-colors">
-                  <Camera className="w-4 h-4" />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingAvatar}
+                  className="absolute bottom-0 right-0 p-2 bg-foreground text-background rounded-full hover:bg-foreground/90 transition-colors disabled:opacity-50"
+                >
+                  {isUploadingAvatar ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Camera className="w-4 h-4" />
+                  )}
                 </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={handleAvatarUpload}
+                />
               </div>
               <h2 className="text-xl font-semibold">{displayName}</h2>
               <p className="text-sm text-muted-foreground">{user?.email || "No email"}</p>
@@ -183,27 +358,56 @@ export default function ProfilePage() {
                   </div>
                   <div>
                     <p className="text-sm font-medium">Password</p>
-                    <p className="text-xs text-muted-foreground">Last changed 30 days ago</p>
+                    <p className="text-xs text-muted-foreground">{passwordAge}</p>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" className="bg-transparent">
-                  Change
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-transparent"
+                  onClick={() => setShowPasswordForm(!showPasswordForm)}
+                >
+                  {showPasswordForm ? "Cancel" : "Change"}
                 </Button>
               </div>
-              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-background rounded-lg">
-                    <Shield className="w-4 h-4" />
+
+              {showPasswordForm && (
+                <div className="p-4 border border-border rounded-lg space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="newPassword">New Password</Label>
+                    <Input
+                      id="newPassword"
+                      type="password"
+                      value={passwordForm.newPass}
+                      onChange={(e) => setPasswordForm(prev => ({ ...prev, newPass: e.target.value }))}
+                      placeholder="At least 6 characters"
+                    />
                   </div>
-                  <div>
-                    <p className="text-sm font-medium">Two-Factor Authentication</p>
-                    <p className="text-xs text-muted-foreground">Add extra security to your account</p>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword">Confirm Password</Label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      value={passwordForm.confirm}
+                      onChange={(e) => setPasswordForm(prev => ({ ...prev, confirm: e.target.value }))}
+                      placeholder="Re-enter new password"
+                    />
                   </div>
+                  {passwordChangeMessage && (
+                    <p className={`text-sm ${passwordChangeMessage.includes("changed") ? "text-[var(--color-positive)]" : "text-red-500"}`}>
+                      {passwordChangeMessage}
+                    </p>
+                  )}
+                  <Button
+                    size="sm"
+                    onClick={handlePasswordChange}
+                    disabled={isChangingPassword}
+                  >
+                    {isChangingPassword ? "Changing..." : "Update Password"}
+                  </Button>
                 </div>
-                <Button variant="outline" size="sm" className="bg-transparent">
-                  Enable
-                </Button>
-              </div>
+              )}
+
             </CardContent>
           </Card>
 
@@ -220,7 +424,7 @@ export default function ProfilePage() {
                     </div>
                     <div className="flex-1">
                       <p className="text-sm">{activity.action}</p>
-                      <p className="text-xs text-muted-foreground">{activity.time}</p>
+                      {activity.time && <p className="text-xs text-muted-foreground">{activity.time}</p>}
                     </div>
                   </div>
                 ))}
