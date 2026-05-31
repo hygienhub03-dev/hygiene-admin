@@ -18,8 +18,11 @@ export interface ProductDoc {
 }
 
 function mapProduct(doc: Record<string, any>): ProductDoc {
-  // Extract image from images array or image field
+  // Extract image from product_images join (POST/PUT), images alias (GET), image_urls column, or image field
   let image = doc.image ?? "";
+  if (!image && Array.isArray(doc.product_images) && doc.product_images.length > 0) {
+    image = doc.product_images[0]?.url ?? "";
+  }
   if (!image && Array.isArray(doc.images) && doc.images.length > 0) {
     image = doc.images[0]?.url ?? "";
   }

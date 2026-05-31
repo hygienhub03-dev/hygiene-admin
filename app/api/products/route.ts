@@ -153,16 +153,23 @@ export async function POST(req: NextRequest) {
 
     // If image URL provided, add to product_images
     if (body.image) {
-      await supabase
+      const { error: imgError } = await supabase
         .from('product_images')
         .insert({
           product_id: product.id,
           url: body.image,
-          is_primary: true
         });
+      if (imgError) throw imgError;
     }
 
-    return NextResponse.json({ success: true, data: product }, { status: 201 });
+    // Re-fetch with images join so the response includes the image
+    const { data: fullProduct } = await supabase
+      .from('products')
+      .select('*, product_images(url)')
+      .eq('id', product.id)
+      .single();
+
+    return NextResponse.json({ success: true, data: fullProduct ?? product }, { status: 201 });
   } catch (error: any) {
     console.error("[POST /api/products]", error);
     return NextResponse.json(

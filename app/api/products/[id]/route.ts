@@ -97,13 +97,37 @@ export async function PUT(
 
     if (error) throw error;
 
-    if (body.image !== undefined) {
-      await supabase
+    if (body.image !== undefined && body.image !== "") {
+      // Check if an image row already exists for this product
+      const { data: existingImg } = await supabase
         .from('product_images')
-        .upsert({ product_id: id, url: body.image, is_primary: true }, { onConflict: 'product_id' });
+        .select('id')
+        .eq('product_id', id)
+        .limit(1)
+        .maybeSingle();
+
+      if (existingImg) {
+        const { error: imgError } = await supabase
+          .from('product_images')
+          .update({ url: body.image })
+          .eq('id', existingImg.id);
+        if (imgError) throw imgError;
+      } else {
+        const { error: imgError } = await supabase
+          .from('product_images')
+          .insert({ product_id: id, url: body.image });
+        if (imgError) throw imgError;
+      }
     }
 
-    return NextResponse.json({ success: true, data: updated });
+    // Re-fetch with images join so the response includes the image
+    const { data: fullProduct } = await supabase
+      .from('products')
+      .select('*, product_images(url)')
+      .eq('id', id)
+      .single();
+
+    return NextResponse.json({ success: true, data: fullProduct ?? updated });
   } catch (error: any) {
     console.error("[PUT /api/products/:id]", error);
     return NextResponse.json(
