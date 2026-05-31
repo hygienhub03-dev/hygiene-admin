@@ -1,17 +1,20 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo, useCallback } from "react"
+import dynamic from "next/dynamic"
 import { MetricCard } from "@/components/dashboard/metric-card"
 import { PageHeader } from "@/components/dashboard/page-header"
-import { ProfitChart } from "@/components/dashboard/profit-chart"
-import { CustomerOrders } from "@/components/dashboard/customer-orders"
 import { TopProducts } from "@/components/dashboard/top-products"
-import { SalesMap } from "@/components/dashboard/sales-map"
 import { Button } from "@/components/ui/button"
-import { Calendar, Upload, DollarSign, ShoppingCart, Users, RotateCcw } from "lucide-react"
+import { Calendar, Upload, DollarSign, ShoppingCart, Users, RotateCcw, ChevronDown } from "lucide-react"
+import { downloadCSV, getPeriodLabel, getPeriodDates, type Period } from "@/lib/utils/export"
 import { useAuth } from "@/context/AuthContext"
 import { getSalesOverview, getSalesTrendData, getTopProducts, type SalesOverview, type SalesTrendData, type ProductPerformance } from "@/lib/analytics"
 import { createSupabaseBrowserClient } from "@/lib/supabase/client"
+
+const ProfitChart = dynamic(() => import("@/components/dashboard/profit-chart").then(m => m.ProfitChart), { ssr: false, loading: () => <div className="h-[280px] animate-pulse bg-muted rounded-lg" /> })
+const CustomerOrders = dynamic(() => import("@/components/dashboard/customer-orders").then(m => m.CustomerOrders), { ssr: false, loading: () => <div className="h-[280px] animate-pulse bg-muted rounded-lg" /> })
+const SalesMap = dynamic(() => import("@/components/dashboard/sales-map").then(m => m.SalesMap), { ssr: false, loading: () => <div className="h-[280px] animate-pulse bg-muted rounded-lg" /> })
 
 const PROVINCE_COLORS = ["#3b82f6", "#22c55e", "#8b5cf6", "#f97316", "#ec4899", "#14b8a6", "#eab308", "#6366f1"]
 
@@ -28,16 +31,19 @@ export default function DashboardPage() {
   const [topProducts, setTopProducts] = useState<ProductPerformance[]>([])
   const [provinceData, setProvinceData] = useState<ProvinceData[]>([])
   const [orderTrendData, setOrderTrendData] = useState<{ month: string; orders: number }[]>([])
+  const [period, setPeriod] = useState<Period>("all")
+  const [periodOpen, setPeriodOpen] = useState(false)
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [period])
 
   const loadData = async () => {
     try {
+      const { start, end } = getPeriodDates(period)
       const [ov, trend, top] = await Promise.all([
-        getSalesOverview(),
-        getSalesTrendData(undefined, undefined, "month"),
+        getSalesOverview(start, end),
+        getSalesTrendData(start, end, "month"),
         getTopProducts(4),
       ])
 
@@ -55,10 +61,16 @@ export default function DashboardPage() {
 
       // Build province breakdown from orders with shipping_address
       const supabase = createSupabaseBrowserClient()
-      const { data: orders } = await supabase
+      let ordersQuery = supabase
         .from("orders")
         .select("total_amount, shipping_address")
         .in("status", ["processing", "shipped", "delivered", "paid"])
+
+      const { start: s, end: e } = getPeriodDates(period)
+      if (s) ordersQuery = ordersQuery.gte("created_at", s)
+      if (e) ordersQuery = ordersQuery.lte("created_at", e)
+
+      const { data: orders } = await ordersQuery
 
       if (orders) {
         const provinceMap = new Map<string, number>()
@@ -92,34 +104,46 @@ export default function DashboardPage() {
   const growthRate = overview?.growthRate || 0
   const growth = `${growthRate >= 0 ? "+" : ""}${growthRate}%`
 
-  // Chart data: monthly sales vs revenue
-  const profitChartData = trendData.map((d) => {
+  const profitChartData = useMemo(() => trendData.map((d) => {
     const date = new Date(d.date)
     return {
       month: date.toLocaleString("en-ZA", { month: "short" }),
       sales: d.sales,
       revenue: d.sales,
     }
-  })
+  }), [trendData])
 
   const totalProfit = overview ? `R${overview.totalSales.toLocaleString()}` : "R0"
-
-  // Total orders for customer orders card
   const totalOrdersNum = overview?.totalOrders || 0
   const totalOrdersDisplay = totalOrdersNum.toLocaleString()
 
-  // Top products for the card
-  const topProductsDisplay = topProducts.map((p) => ({
+  const topProductsDisplay = useMemo(() => topProducts.map((p) => ({
     name: p.name,
     category: "",
     price: `R${p.totalRevenue.toLocaleString()}`,
     image: p.image,
-  }))
+  })), [topProducts])
 
-  // Province stats
   const topProvince = provinceData[0]?.province || "N/A"
   const topProvinceRevenue = provinceData[0] ? `R${provinceData[0].value.toLocaleString()}` : "R0"
   const totalProvinceRevenue = provinceData.reduce((sum, p) => sum + p.value, 0)
+
+  const handleExport = useCallback(() => {
+    downloadCSV(`hygienhub-dashboard-${period}.csv`, [
+      { metric: "Total Revenue", value: revenue },
+      { metric: "Total Orders", value: ordersCount },
+      { metric: "Active Customers", value: customers },
+      { metric: "Growth Rate", value: growth },
+      ...topProducts.map((p) => ({
+        metric: `Product: ${p.name}`,
+        value: `R${p.totalRevenue.toLocaleString()}`,
+      })),
+      ...provinceData.map((p) => ({
+        metric: `Province: ${p.province}`,
+        value: `R${p.value.toLocaleString()}`,
+      })),
+    ])
+  }, [period, revenue, ordersCount, customers, growth, topProducts, provinceData])
 
   return (
     <>
@@ -127,11 +151,35 @@ export default function DashboardPage() {
         title={`Welcome back ${profile?.first_name ? profile.first_name : ""} 👋`}
         description="An overview of customer insights, sales performance, and revenue analytics for Hygiene Hub Skincare."
       >
-        <Button variant="outline" className="flex items-center gap-2 bg-transparent text-sm">
-          <Calendar className="w-4 h-4" />
-          This Week
-        </Button>
-        <Button variant="outline" className="flex items-center gap-2 bg-transparent">
+        <div className="relative">
+          <Button
+            variant="outline"
+            className="flex items-center gap-2 bg-transparent text-sm"
+            onClick={() => setPeriodOpen(!periodOpen)}
+          >
+            <Calendar className="w-4 h-4" />
+            {getPeriodLabel(period)}
+            <ChevronDown className="w-3 h-3" />
+          </Button>
+          {periodOpen && (
+            <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-border rounded-lg shadow-lg py-1 min-w-[140px]">
+              {(["week", "month", "year", "all"] as Period[]).map((p) => (
+                <button
+                  key={p}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors ${period === p ? "font-medium bg-muted" : ""}`}
+                  onClick={() => { setPeriod(p); setPeriodOpen(false) }}
+                >
+                  {getPeriodLabel(p)}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <Button
+          variant="outline"
+          className="flex items-center gap-2 bg-transparent"
+          onClick={handleExport}
+        >
           <Upload className="w-4 h-4" />
           Export Report
         </Button>

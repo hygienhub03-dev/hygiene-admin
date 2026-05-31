@@ -10,25 +10,17 @@ import {
   Calendar,
   TrendingUp,
   TrendingDown,
-  BarChart3,
-  PieChart,
   ArrowUpRight,
   ArrowDownRight,
-  Clock
+  ChevronDown
 } from "lucide-react"
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart as RechartsPieChart,
-  Pie,
-  Cell,
-  Legend,
-} from "recharts"
+import { downloadCSV, getPeriodLabel, getPeriodDates, type Period } from "@/lib/utils/export"
+import dynamic from "next/dynamic"
+
+const ReportsCharts = dynamic(() => import("@/components/dashboard/reports-charts").then(m => m.ReportsCharts), {
+  ssr: false,
+  loading: () => <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6"><div className="lg:col-span-2 h-[300px] animate-pulse bg-muted rounded-lg" /><div className="h-[300px] animate-pulse bg-muted rounded-lg" /></div>,
+})
 import { getSalesOverview, getTopProducts, getCustomerMetrics, getSalesTrendData, type SalesOverview, type CustomerMetrics, type SalesTrendData } from "@/lib/analytics"
 import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 
@@ -40,17 +32,20 @@ export default function ReportsPage() {
   const [trendData, setTrendData] = useState<SalesTrendData[]>([])
   const [categoryData, setCategoryData] = useState<{ name: string; value: number; color: string }[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [period, setPeriod] = useState<Period>("all")
+  const [periodOpen, setPeriodOpen] = useState(false)
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [period])
 
   const loadData = async () => {
     try {
+      const { start, end } = getPeriodDates(period)
       const [ov, cm, trend] = await Promise.all([
-        getSalesOverview(),
-        getCustomerMetrics(),
-        getSalesTrendData(undefined, undefined, "month"),
+        getSalesOverview(start, end),
+        getCustomerMetrics(start, end),
+        getSalesTrendData(start, end, "month"),
       ])
 
       setOverview(ov)
@@ -59,9 +54,15 @@ export default function ReportsPage() {
 
       // Build category breakdown from order_items
       const supabase = createSupabaseBrowserClient()
-      const { data: orderItems } = await supabase
+      let itemsQuery = supabase
         .from('order_items')
-        .select('quantity, unit_price, product_id, products(category_id, categories(name))')
+        .select('quantity, unit_price, product_id, products(category_id, categories(name)), orders!inner(created_at)')
+
+      const { start: s, end: e } = getPeriodDates(period)
+      if (s) itemsQuery = itemsQuery.gte('orders.created_at', s)
+      if (e) itemsQuery = itemsQuery.lte('orders.created_at', e)
+
+      const { data: orderItems } = await itemsQuery
 
       if (orderItems) {
         const catMap = new Map<string, number>()
@@ -114,10 +115,54 @@ export default function ReportsPage() {
   ]
 
   const availableReports = [
-    { name: "Sales Overview", description: `${totalOrders} orders totaling R${totalSales.toLocaleString()}`, date: "Live data", size: "" },
-    { name: "Customer Analytics", description: `${totalCustomers} customers, ${newCustomers} new this period`, date: "Live data", size: "" },
-    { name: "Top Products", description: "Top selling products by revenue", date: "Live data", size: "" },
-    { name: "Category Breakdown", description: `${categoryData.length} categories analyzed`, date: "Live data", size: "" },
+    {
+      name: "Sales Overview",
+      description: `${totalOrders} orders totaling R${totalSales.toLocaleString()}`,
+      date: "Live data",
+      download: () => downloadCSV(`sales-overview-${period}.csv`, [
+        { metric: "Total Revenue", value: `R${totalSales.toLocaleString()}` },
+        { metric: "Total Orders", value: totalOrders },
+        { metric: "Avg Order Value", value: `R${avgOrder.toFixed(2)}` },
+        { metric: "Growth Rate", value: `${growthRate}%` },
+        ...chartData.map((d) => ({ metric: d.month, value: `R${d.thisYear.toLocaleString()}` })),
+      ]),
+    },
+    {
+      name: "Customer Analytics",
+      description: `${totalCustomers} customers, ${newCustomers} new this period`,
+      date: "Live data",
+      download: () => downloadCSV(`customer-analytics-${period}.csv`, [
+        { metric: "Total Customers", value: totalCustomers },
+        { metric: "New Customers", value: newCustomers },
+        { metric: "Returning Customers", value: returningCustomers },
+        { metric: "Customer Lifetime Value", value: `R${clv.toFixed(2)}` },
+      ]),
+    },
+    {
+      name: "Top Products",
+      description: "Top selling products by revenue",
+      date: "Live data",
+      download: () => {
+        const supabase = createSupabaseBrowserClient()
+        getTopProducts(20).then((products) => {
+          downloadCSV(`top-products-${period}.csv`, products.map((p) => ({
+            product: p.name,
+            units_sold: p.totalSold,
+            revenue: `R${p.totalRevenue.toLocaleString()}`,
+            rating: p.averageRating,
+          })))
+        })
+      },
+    },
+    {
+      name: "Category Breakdown",
+      description: `${categoryData.length} categories analyzed`,
+      date: "Live data",
+      download: () => downloadCSV(`category-breakdown-${period}.csv`, categoryData.map((c) => ({
+        category: c.name,
+        percentage: `${c.value}%`,
+      }))),
+    },
   ]
 
   if (isLoading) {
@@ -134,11 +179,50 @@ export default function ReportsPage() {
         title="Reports"
         description="Generate, view, and download detailed analytics reports."
       >
-        <Button variant="outline" className="flex items-center gap-2 bg-transparent text-sm">
-          <Calendar className="w-4 h-4" />
-          This Period
-        </Button>
-        <Button className="flex items-center gap-2 bg-foreground text-background hover:bg-foreground/90">
+        <div className="relative">
+          <Button
+            variant="outline"
+            className="flex items-center gap-2 bg-transparent text-sm"
+            onClick={() => setPeriodOpen(!periodOpen)}
+          >
+            <Calendar className="w-4 h-4" />
+            {getPeriodLabel(period)}
+            <ChevronDown className="w-3 h-3" />
+          </Button>
+          {periodOpen && (
+            <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-border rounded-lg shadow-lg py-1 min-w-[140px]">
+              {(["week", "month", "year", "all"] as Period[]).map((p) => (
+                <button
+                  key={p}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors ${period === p ? "font-medium bg-muted" : ""}`}
+                  onClick={() => { setPeriod(p); setPeriodOpen(false) }}
+                >
+                  {getPeriodLabel(p)}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <Button
+          className="flex items-center gap-2 bg-foreground text-background hover:bg-foreground/90"
+          onClick={() => {
+            downloadCSV(`hygienhub-report-${period}.csv`, [
+              { section: "Overview", metric: "Total Revenue", value: `R${totalSales.toLocaleString()}` },
+              { section: "Overview", metric: "Total Orders", value: totalOrders.toString() },
+              { section: "Overview", metric: "Avg Order Value", value: `R${avgOrder.toFixed(2)}` },
+              { section: "Overview", metric: "Growth Rate", value: `${growthRate}%` },
+              { section: "Customers", metric: "Total Customers", value: totalCustomers.toString() },
+              { section: "Customers", metric: "New Customers", value: newCustomers.toString() },
+              { section: "Customers", metric: "Returning", value: returningCustomers.toString() },
+              { section: "Customers", metric: "CLV", value: `R${clv.toFixed(2)}` },
+              ...categoryData.map((c) => ({
+                section: "Categories",
+                metric: c.name,
+                value: `${c.value}%`,
+              })),
+            ])
+          }}
+        >
           <FileText className="w-4 h-4" />
           Generate Report
         </Button>
@@ -165,115 +249,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-        {/* Revenue Chart */}
-        <Card className="lg:col-span-2 bg-card border border-border">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base font-medium flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4" />
-                  Revenue Trend
-                </CardTitle>
-                <CardDescription>Monthly sales performance</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {chartData.length === 0 ? (
-              <div className="h-[250px] flex items-center justify-center text-muted-foreground text-sm">
-                No revenue data available yet
-              </div>
-            ) : (
-              <div className="h-[250px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
-                    <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#9CA3AF" />
-                    <YAxis tick={{ fontSize: 12 }} stroke="#9CA3AF" tickFormatter={(v) => `R${v/1000}k`} />
-                    <Tooltip
-                      formatter={(value: number) => [`R${value.toLocaleString()}`, ""]}
-                      contentStyle={{
-                        backgroundColor: "white",
-                        border: "1px solid #E5E5E5",
-                        borderRadius: "8px",
-                        fontSize: "12px"
-                      }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="thisYear"
-                      stroke="#B4D4A5"
-                      fill="#B4D4A5"
-                      fillOpacity={0.3}
-                      strokeWidth={2}
-                      name="Revenue"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Sales by Category */}
-        <Card className="bg-card border border-border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-medium flex items-center gap-2">
-              <PieChart className="w-4 h-4" />
-              Sales by Category
-            </CardTitle>
-            <CardDescription>Distribution of revenue</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {categoryData.length === 0 ? (
-              <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
-                No category data yet
-              </div>
-            ) : (
-              <>
-                <div className="h-[200px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RechartsPieChart>
-                      <Pie
-                        data={categoryData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50}
-                        outerRadius={70}
-                        paddingAngle={2}
-                        dataKey="value"
-                      >
-                        {categoryData.map((entry) => (
-                          <Cell key={entry.name} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        formatter={(value: number) => [`${value}%`, ""]}
-                        contentStyle={{
-                          backgroundColor: "white",
-                          border: "1px solid #E5E5E5",
-                          borderRadius: "8px",
-                          fontSize: "12px"
-                        }}
-                      />
-                    </RechartsPieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  {categoryData.map((cat) => (
-                    <div key={cat.name} className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
-                      <span className="text-xs text-muted-foreground">{cat.name}</span>
-                      <span className="text-xs font-medium ml-auto">{cat.value}%</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      <ReportsCharts chartData={chartData} categoryData={categoryData} />
 
       {/* Available Reports */}
       <Card className="bg-card border border-border">
@@ -310,7 +286,12 @@ export default function ReportsPage() {
                     </div>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" className="bg-transparent flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-transparent flex items-center gap-2"
+                  onClick={report.download}
+                >
                   <Download className="w-4 h-4" />
                   Download
                 </Button>
