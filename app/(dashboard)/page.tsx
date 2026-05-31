@@ -113,7 +113,7 @@ export default function DashboardPage() {
     name: p.name,
     category: "",
     price: `R${p.totalRevenue.toLocaleString()}`,
-    image: "/placeholder.svg",
+    image: p.image,
   }))
 
   // Province stats

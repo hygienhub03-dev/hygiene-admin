@@ -21,6 +21,7 @@ export interface ProductPerformance {
   totalSold: number;
   totalRevenue: number;
   averageRating: number;
+  image: string;
 }
 
 export interface CustomerMetrics {
@@ -152,15 +153,33 @@ export async function getTopProducts(limit: number = 10): Promise<ProductPerform
     productMap.set(productId, existing);
   }
 
-  return Array.from(productMap.entries())
+  const sorted = Array.from(productMap.entries())
     .map(([id, data]) => ({ id, ...data }))
     .sort((a, b) => b.totalRevenue - a.totalRevenue)
-    .slice(0, limit)
-    .map(p => ({
-      ...p,
-      totalRevenue: Math.round(p.totalRevenue * 100) / 100,
-      averageRating: Math.round(p.averageRating * 100) / 100
-    }));
+    .slice(0, limit);
+
+  // Fetch product images for the top products
+  const productIds = sorted.map(p => p.id);
+  const { data: images } = await supabase
+    .from('product_images')
+    .select('product_id, url')
+    .in('product_id', productIds);
+
+  const imageMap = new Map<string, string>();
+  if (images) {
+    for (const img of images as any[]) {
+      if (!imageMap.has(img.product_id)) {
+        imageMap.set(img.product_id, img.url);
+      }
+    }
+  }
+
+  return sorted.map(p => ({
+    ...p,
+    totalRevenue: Math.round(p.totalRevenue * 100) / 100,
+    averageRating: Math.round(p.averageRating * 100) / 100,
+    image: imageMap.get(p.id) || '/placeholder.svg',
+  }));
 }
 
 export async function getCustomerMetrics(
