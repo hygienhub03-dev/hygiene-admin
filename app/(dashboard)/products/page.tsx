@@ -38,7 +38,7 @@ interface ProductItem {
   raw: ProductDoc
 }
 
-const categories = ["All Categories", "Skincare", "Body Care", "Hair Care", "Fragrances", "Accessories"]
+const categories = ["All Categories", "Skincare", "Body Care", "Gift Sets", "Hair Care", "Fragrances", "Accessories"]
 const statuses = ["All Statuses", "Active", "Inactive", "Out of Stock"]
 
 export default function ProductsPage() {

@@ -28,13 +28,28 @@ export async function GET(req: NextRequest) {
       .select(`
         *,
         category: categories(id, name, slug),
-        images: product_images(id, url),
-        combo_items(product_id, quantity, products(id, name))
+        images: product_images(id, url)
       `)
       .order('created_at', { ascending: false })
       .limit(500);
 
     if (error) throw error;
+
+    const comboItemsByProductId = new Map<string, any[]>();
+    if (data && data.length > 0) {
+      const productIds = (data as any[]).map((product) => product.id);
+      const { data: comboItems, error: comboItemsError } = await supabase
+        .from('combo_items')
+        .select('combo_id, product_id, quantity')
+        .in('combo_id', productIds);
+
+      if (comboItemsError) throw comboItemsError;
+      for (const item of comboItems ?? []) {
+        const items = comboItemsByProductId.get(item.combo_id) ?? [];
+        items.push(item);
+        comboItemsByProductId.set(item.combo_id, items);
+      }
+    }
 
     // Fetch sales data per product
     const { data: orderItems } = await supabase
@@ -56,6 +71,7 @@ export async function GET(req: NextRequest) {
       const sales = salesMap.get(product.id) || { unitsSold: 0, revenue: 0 };
       return {
         ...product,
+        combo_items: comboItemsByProductId.get(product.id) ?? [],
         unitsSold: sales.unitsSold,
         revenue: Math.round(sales.revenue * 100) / 100,
       };
@@ -175,14 +191,26 @@ export async function POST(req: NextRequest) {
       if (ciError) throw ciError;
     }
 
-    // Re-fetch with images join so the response includes the image
-    const { data: fullProduct } = await supabase
+    // Re-fetch without nested product relationships to avoid ambiguous FK errors.
+    const { data: fullProduct, error: refetchError } = await supabase
       .from('products')
-      .select('*, product_images(url), combo_items(product_id, quantity, products(name))')
+      .select('*, category: categories(id, name, slug), images: product_images(id, url)')
       .eq('id', product.id)
       .single();
 
-    return NextResponse.json({ success: true, data: fullProduct ?? product }, { status: 201 });
+    if (refetchError) throw refetchError;
+
+    const { data: comboItems, error: comboItemsError } = await supabase
+      .from('combo_items')
+      .select('combo_id, product_id, quantity')
+      .eq('combo_id', product.id);
+
+    if (comboItemsError) throw comboItemsError;
+
+    return NextResponse.json(
+      { success: true, data: { ...(fullProduct ?? product), combo_items: comboItems ?? [] } },
+      { status: 201 },
+    );
   } catch (error: any) {
     console.error("[POST /api/products]", error);
     return NextResponse.json(

@@ -81,11 +81,18 @@ export async function PUT(
     if (Object.keys(updates).length === 0 && body.image === undefined && body.comboItems === undefined) {
       const { data: existing, error } = await supabase
         .from('products')
-        .select('*')
+        .select('*, category: categories(id, name, slug), images: product_images(id, url)')
         .eq('id', id)
         .single();
       if (error) throw error;
-      return NextResponse.json({ success: true, data: existing });
+
+      const { data: comboItems, error: comboItemsError } = await supabase
+        .from('combo_items')
+        .select('combo_id, product_id, quantity')
+        .eq('combo_id', id);
+
+      if (comboItemsError) throw comboItemsError;
+      return NextResponse.json({ success: true, data: { ...existing, combo_items: comboItems ?? [] } });
     }
 
     if (body.isCombo !== undefined) updates.is_combo = body.isCombo;
@@ -137,14 +144,23 @@ export async function PUT(
       }
     }
 
-    // Re-fetch with images join so the response includes the image
-    const { data: fullProduct } = await supabase
+    // Re-fetch without nested product relationships to avoid ambiguous FK errors.
+    const { data: fullProduct, error: refetchError } = await supabase
       .from('products')
-      .select('*, product_images(url), combo_items(product_id, quantity, products(name))')
+      .select('*, category: categories(id, name, slug), images: product_images(id, url)')
       .eq('id', id)
       .single();
 
-    return NextResponse.json({ success: true, data: fullProduct ?? updated });
+    if (refetchError) throw refetchError;
+
+    const { data: comboItems, error: comboItemsError } = await supabase
+      .from('combo_items')
+      .select('combo_id, product_id, quantity')
+      .eq('combo_id', id);
+
+    if (comboItemsError) throw comboItemsError;
+
+    return NextResponse.json({ success: true, data: { ...(fullProduct ?? updated), combo_items: comboItems ?? [] } });
   } catch (error: any) {
     console.error("[PUT /api/products/:id]", error);
     return NextResponse.json(

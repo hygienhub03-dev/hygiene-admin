@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select"
 import { addProduct, editProduct, listProducts, type ProductDoc } from "@/lib/admin-products"
 
-const CATEGORIES = ["Skincare", "Body Care", "Hair Care", "Fragrances", "Accessories"]
+const CATEGORIES = ["Skincare", "Body Care", "Gift Sets", "Hair Care", "Fragrances", "Accessories"]
 
 interface ProductModalProps {
   open: boolean
