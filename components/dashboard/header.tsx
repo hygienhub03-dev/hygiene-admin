@@ -22,6 +22,7 @@ const navItems = [
   { label: "Customers", href: "/customers" },
   { label: "Reports", href: "/reports" },
   { label: "Orders", href: "/orders" },
+  { label: "Settings", href: "/settings" },
 ]
 
 export function Header() {
@@ -96,7 +97,9 @@ export function Header() {
             <DropdownMenuItem asChild>
               <Link href="/profile">Profile</Link>
             </DropdownMenuItem>
-            <DropdownMenuItem>Settings</DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/settings">Settings</Link>
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="text-destructive" onClick={handleLogout}>Log out</DropdownMenuItem>
           </DropdownMenuContent>
