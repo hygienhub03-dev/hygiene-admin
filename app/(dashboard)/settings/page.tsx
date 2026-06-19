@@ -71,7 +71,7 @@ export default function SettingsPage() {
     setIsResetting(true)
     try {
       const res = await apiFetch("/api/settings/reset-test-data", {
-        method: "DELETE",
+        method: "POST",
         body: { confirm: RESET_CONFIRMATION },
       })
 
@@ -143,10 +143,10 @@ export default function SettingsPage() {
                     Clear test data
                   </Button>
                 </AlertDialogTrigger>
-                <AlertDialogContent>
+                <AlertDialogContent aria-labelledby="reset-test-data-title" aria-describedby="reset-test-data-description">
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Clear all launch-prep test data?</AlertDialogTitle>
-                    <AlertDialogDescription>
+                    <AlertDialogTitle id="reset-test-data-title">Clear all launch-prep test data?</AlertDialogTitle>
+                    <AlertDialogDescription id="reset-test-data-description">
                       This will delete test stats, non-admin users, orders, carts, subscriptions, reviews, and report source data.
                       Products and admin users will remain available.
                     </AlertDialogDescription>

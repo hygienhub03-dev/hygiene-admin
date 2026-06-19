@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireAdminForApi } from "@/lib/admin-auth";
 
-const RESET_CONFIRMATION = "CLEAR_TEST_DATA";
+const RESET_CONFIRMATION = "CLEAR TEST DATA";
 
 const TABLES_TO_CLEAR = [
   "review_helpful_votes",
@@ -26,7 +26,7 @@ const TABLES_TO_CLEAR = [
   "tax_rates",
 ];
 
-export async function DELETE(req: NextRequest) {
+export async function POST(req: NextRequest) {
   const authError = await requireAdminForApi(req);
   if (authError) return authError;
 
