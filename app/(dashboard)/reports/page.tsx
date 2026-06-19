@@ -258,9 +258,30 @@ export default function ReportsPage() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-base font-medium">Available Reports</CardTitle>
-              <CardDescription>Download or schedule automated reports</CardDescription>
+              <CardDescription>Download detailed analytics as CSV</CardDescription>
             </div>
-            <Button variant="outline" size="sm" className="bg-transparent">
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-transparent"
+              onClick={() => {
+                downloadCSV(`hygienhub-report-${period}.csv`, [
+                  { section: "Overview", metric: "Total Revenue", value: `R${totalSales.toLocaleString()}` },
+                  { section: "Overview", metric: "Total Orders", value: totalOrders.toString() },
+                  { section: "Overview", metric: "Avg Order Value", value: `R${avgOrder.toFixed(2)}` },
+                  { section: "Overview", metric: "Growth Rate", value: `${growthRate}%` },
+                  { section: "Customers", metric: "Total Customers", value: totalCustomers.toString() },
+                  { section: "Customers", metric: "New Customers", value: newCustomers.toString() },
+                  { section: "Customers", metric: "Returning", value: returningCustomers.toString() },
+                  { section: "Customers", metric: "CLV", value: `R${clv.toFixed(2)}` },
+                  ...categoryData.map((c) => ({
+                    section: "Categories",
+                    metric: c.name,
+                    value: `${c.value}%`,
+                  })),
+                ])
+              }}
+            >
               View All Reports
             </Button>
           </div>

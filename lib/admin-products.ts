@@ -13,6 +13,8 @@ export interface ProductDoc {
   averageReview: number;
   unitsSold: number;
   revenue: number;
+  isCombo: boolean;
+  comboItems?: { product_id: string; quantity: number; name?: string }[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -48,6 +50,8 @@ function mapProduct(doc: Record<string, any>): ProductDoc {
     averageReview: doc.averageReview ?? doc.average_review ?? 0,
     unitsSold: doc.unitsSold ?? 0,
     revenue: doc.revenue ?? 0,
+    isCombo: doc.isCombo ?? doc.is_combo ?? false,
+    comboItems: doc.comboItems ?? doc.combo_items ?? [],
     createdAt: doc.createdAt ?? doc.created_at,
     updatedAt: doc.updatedAt ?? doc.updated_at,
   };
@@ -87,6 +91,8 @@ export async function addProduct(
     salePrice: number;
     totalStock: number;
     image: string;
+    isCombo?: boolean;
+    comboItems?: { product_id: string; quantity: number }[];
   },
   imageFile: File | null,
 ): Promise<ProductDoc> {
@@ -110,6 +116,8 @@ export async function editProduct(
     salePrice: number;
     totalStock: number;
     image: string;
+    isCombo?: boolean;
+    comboItems?: { product_id: string; quantity: number }[];
   },
   imageFile: File | null,
 ): Promise<ProductDoc> {

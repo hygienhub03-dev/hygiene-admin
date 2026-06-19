@@ -78,7 +78,7 @@ export async function PUT(
       }
     }
 
-    if (Object.keys(updates).length === 0) {
+    if (Object.keys(updates).length === 0 && body.image === undefined && body.comboItems === undefined) {
       const { data: existing, error } = await supabase
         .from('products')
         .select('*')
@@ -87,6 +87,8 @@ export async function PUT(
       if (error) throw error;
       return NextResponse.json({ success: true, data: existing });
     }
+
+    if (body.isCombo !== undefined) updates.is_combo = body.isCombo;
 
     const { data: updated, error } = await supabase
       .from('products')
@@ -120,10 +122,25 @@ export async function PUT(
       }
     }
 
+    // Handle combo items if provided
+    if (body.isCombo && body.comboItems !== undefined) {
+      // Delete existing combo items then re-insert
+      await supabase.from('combo_items').delete().eq('combo_id', id);
+      if (body.comboItems.length > 0) {
+        const rows = body.comboItems.map((ci: any) => ({
+          combo_id: id,
+          product_id: ci.product_id,
+          quantity: ci.quantity ?? 1,
+        }));
+        const { error: ciError } = await supabase.from('combo_items').insert(rows);
+        if (ciError) throw ciError;
+      }
+    }
+
     // Re-fetch with images join so the response includes the image
     const { data: fullProduct } = await supabase
       .from('products')
-      .select('*, product_images(url)')
+      .select('*, product_images(url), combo_items(product_id, quantity, products(name))')
       .eq('id', id)
       .single();
 

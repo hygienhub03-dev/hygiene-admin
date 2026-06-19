@@ -290,6 +290,9 @@ export default function ProductsPage() {
                         />
                       </div>
                       <span className="font-medium max-w-[150px] truncate">{product.name}</span>
+                      {product.raw.isCombo && (
+                        <span className="text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary px-1.5 py-0.5 rounded-full shrink-0">Combo</span>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground">{product.sku}</TableCell>

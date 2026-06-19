@@ -28,7 +28,8 @@ export async function GET(req: NextRequest) {
       .select(`
         *,
         category: categories(id, name, slug),
-        images: product_images(id, url)
+        images: product_images(id, url),
+        combo_items(product_id, quantity, products(id, name))
       `)
       .order('created_at', { ascending: false })
       .limit(500);
@@ -145,6 +146,7 @@ export async function POST(req: NextRequest) {
         category_id: categoryId,
         stock: body.totalStock,
         featured: false,
+        is_combo: body.isCombo ?? false,
       })
       .select()
       .single();
@@ -162,10 +164,21 @@ export async function POST(req: NextRequest) {
       if (imgError) throw imgError;
     }
 
+    // If combo, insert combo_items
+    if (body.isCombo && body.comboItems && body.comboItems.length > 0) {
+      const rows = body.comboItems.map((ci: any) => ({
+        combo_id: product.id,
+        product_id: ci.product_id,
+        quantity: ci.quantity ?? 1,
+      }));
+      const { error: ciError } = await supabase.from('combo_items').insert(rows);
+      if (ciError) throw ciError;
+    }
+
     // Re-fetch with images join so the response includes the image
     const { data: fullProduct } = await supabase
       .from('products')
-      .select('*, product_images(url)')
+      .select('*, product_images(url), combo_items(product_id, quantity, products(name))')
       .eq('id', product.id)
       .single();
 

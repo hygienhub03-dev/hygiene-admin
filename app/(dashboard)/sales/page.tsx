@@ -4,11 +4,12 @@ import { useState, useEffect } from "react"
 import { PageHeader } from "@/components/dashboard/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Calendar, Download, TrendingUp, DollarSign, ShoppingBag, CreditCard } from "lucide-react"
+import { Calendar, Download, TrendingUp, DollarSign, ShoppingBag, CreditCard, ChevronDown } from "lucide-react"
 import { Bar, BarChart, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts"
 import Image from "next/image"
 import { getSalesOverview, getTopProducts, getSalesTrendData, type SalesOverview, type ProductPerformance, type SalesTrendData } from "@/lib/analytics"
 import { createSupabaseBrowserClient } from "@/lib/supabase/client"
+import { downloadCSV, getPeriodLabel, getPeriodDates, type Period } from "@/lib/utils/export"
 
 const COLORS = ["#B4D4A5", "#3D3D3D", "#6B7280", "#D1D5DB"]
 
@@ -18,16 +19,19 @@ export default function SalesPage() {
   const [topProducts, setTopProducts] = useState<ProductPerformance[]>([])
   const [salesByChannel, setSalesByChannel] = useState<{ channel: string; sales: number; percentage: number }[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [period, setPeriod] = useState<Period>("year")
+  const [periodOpen, setPeriodOpen] = useState(false)
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [period])
 
   const loadData = async () => {
     try {
+      const { start, end } = getPeriodDates(period)
       const [ov, trend, top] = await Promise.all([
-        getSalesOverview(),
-        getSalesTrendData(undefined, undefined, "month"),
+        getSalesOverview(start, end),
+        getSalesTrendData(start, end, "month"),
         getTopProducts(4),
       ])
 
@@ -37,10 +41,15 @@ export default function SalesPage() {
 
       // Build sales by channel from payment method breakdown
       const supabase = createSupabaseBrowserClient()
-      const { data: orders } = await supabase
+      let ordersQuery = supabase
         .from('orders')
-        .select('payment_method, total_amount')
+        .select('payment_method, total_amount, created_at')
         .in('status', ['processing', 'shipped', 'delivered', 'paid'])
+
+      if (start) ordersQuery = ordersQuery.gte('created_at', start)
+      if (end) ordersQuery = ordersQuery.lte('created_at', end)
+
+      const { data: orders } = await ordersQuery
 
       if (orders) {
         const methodMap = new Map<string, number>()
@@ -92,11 +101,45 @@ export default function SalesPage() {
         title="Sales Analytics"
         description="Track your sales performance and product metrics."
       >
-        <Button variant="outline" className="flex items-center gap-2 bg-transparent text-sm">
-          <Calendar className="w-4 h-4" />
-          This Year
-        </Button>
-        <Button variant="outline" className="flex items-center gap-2 bg-transparent">
+        <div className="relative">
+          <Button
+            variant="outline"
+            className="flex items-center gap-2 bg-transparent text-sm"
+            onClick={() => setPeriodOpen(!periodOpen)}
+          >
+            <Calendar className="w-4 h-4" />
+            {getPeriodLabel(period)}
+            <ChevronDown className="w-3 h-3" />
+          </Button>
+          {periodOpen && (
+            <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-border rounded-lg shadow-lg py-1 min-w-[140px]">
+              {(["week", "month", "year", "all"] as Period[]).map((p) => (
+                <button
+                  key={p}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors ${period === p ? "font-medium bg-muted" : ""}`}
+                  onClick={() => { setPeriod(p); setPeriodOpen(false) }}
+                >
+                  {getPeriodLabel(p)}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <Button
+          variant="outline"
+          className="flex items-center gap-2 bg-transparent"
+          onClick={() => {
+            downloadCSV(`hygienhub-sales-${period}.csv`, [
+              { metric: "Total Sales", value: `R${totalSales.toLocaleString()}` },
+              { metric: "Average Order Value", value: `R${avgOrder.toFixed(2)}` },
+              { metric: "Total Orders", value: totalOrders.toString() },
+              { metric: "Growth Rate", value: `${growthRate}%` },
+              ...chartData.map((d) => ({ metric: `Revenue — ${d.month}`, value: `R${d.revenue.toLocaleString()}` })),
+              ...salesByChannel.map((c) => ({ metric: `Channel — ${c.channel}`, value: `R${c.sales.toLocaleString()} (${c.percentage}%)` })),
+              ...topProducts.map((p) => ({ metric: `Top Product — ${p.name}`, value: `${p.totalSold} units / R${p.totalRevenue.toLocaleString()}` })),
+            ])
+          }}
+        >
           <Download className="w-4 h-4" />
           Export
         </Button>

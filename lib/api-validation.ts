@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+const comboItemSchema = z.object({
+  product_id: z.string().uuid(),
+  quantity: z.number().int().min(1).max(100).optional().default(1),
+});
+
 export const productInputSchema = z.object({
   image: z.string().trim().max(500).optional().default(""),
   title: z.string().trim().min(1).max(200),
@@ -9,6 +14,8 @@ export const productInputSchema = z.object({
   price: z.number().min(0).max(1_000_000),
   salePrice: z.number().min(0).max(1_000_000).optional().default(0),
   totalStock: z.number().int().min(0).max(1_000_000),
+  isCombo: z.boolean().optional().default(false),
+  comboItems: z.array(comboItemSchema).max(20).optional().default([]),
 });
 
 export const productUpdateSchema = productInputSchema.partial().refine(

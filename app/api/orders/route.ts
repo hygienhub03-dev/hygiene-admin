@@ -39,6 +39,8 @@ function mapOrder(order: any) {
     paymentStatus: order.payment_status,
     paymentMethod: order.payment_method,
     totalAmount: Number(order.total_amount ?? 0),
+    deliveryMethod: order.delivery_method ?? "door",
+    shippingCost: Number(order.shipping_cost ?? 0),
     orderDate: order.created_at,
     orderUpdateDate: order.updated_at,
     paymentId: order.payment_reference,

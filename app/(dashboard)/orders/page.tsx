@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Search, Filter, ShoppingCart, Package, Truck, CheckCircle, Clock, XCircle, ChevronDown } from "lucide-react"
 import { apiFetch } from "@/lib/api"
+import Link from "next/link"
 import Loading from "./loading"
 
 interface OrderItem {
@@ -28,6 +29,7 @@ interface OrderItem {
   rawStatus: string
   date: string
   payment: string
+  deliveryMethod: string
 }
 
 const STATUS_OPTIONS = [
@@ -78,6 +80,7 @@ function OrdersContent() {
           rawStatus: o.orderStatus || "waiting",
           date: o.orderDate ? new Date(o.orderDate).toLocaleDateString("en-ZA", { month: "short", day: "numeric", year: "numeric" }) : "N/A",
           payment: o.paymentMethod || "N/A",
+          deliveryMethod: o.deliveryMethod || "door",
         })))
       }
     } catch (err) {
@@ -249,19 +252,24 @@ function OrdersContent() {
                     <th className="text-left text-muted-foreground font-medium text-sm py-3 px-4">STATUS</th>
                     <th className="text-left text-muted-foreground font-medium text-sm py-3 px-4">DATE</th>
                     <th className="text-left text-muted-foreground font-medium text-sm py-3 px-4">PAYMENT</th>
+                    <th className="text-left text-muted-foreground font-medium text-sm py-3 px-4">DELIVERY</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredOrders.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="text-center py-12 text-muted-foreground">
+                      <td colSpan={8} className="text-center py-12 text-muted-foreground">
                         No orders found
                       </td>
                     </tr>
                   ) : (
                     filteredOrders.map((order) => (
                       <tr key={order.fullId} className="border-b border-border hover:bg-muted/50">
-                        <td className="py-3 px-4 font-medium">{order.id}</td>
+                        <td className="py-3 px-4 font-medium">
+                          <Link href={`/orders/${order.fullId}`} className="text-foreground hover:underline">
+                            {order.id}
+                          </Link>
+                        </td>
                         <td className="py-3 px-4">
                           <div>
                             <p className="font-medium">{order.customer}</p>
@@ -306,6 +314,11 @@ function OrdersContent() {
                         </td>
                         <td className="py-3 px-4 text-muted-foreground">{order.date}</td>
                         <td className="py-3 px-4 text-muted-foreground">{order.payment}</td>
+                        <td className="py-3 px-4">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${order.deliveryMethod === "paxi" ? "bg-purple-100 text-purple-800" : "bg-gray-100 text-gray-800"}`}>
+                            {order.deliveryMethod === "paxi" ? "PEP Pickup" : "Door to Door"}
+                          </span>
+                        </td>
                       </tr>
                     ))
                   )}
