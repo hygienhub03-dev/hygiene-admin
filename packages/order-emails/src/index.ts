@@ -1,0 +1,21 @@
+export { sendEmail, type SendEmailPayload, type SendEmailResult } from "./send"
+export {
+  buildProcessingEmail,
+  buildShippedEmail,
+  buildDeliveredEmail,
+  buildLowStockDigestEmail,
+  buildPartnerWelcomeEmail,
+  buildTeamJoinEmail,
+  buildCommissionEarnedEmail,
+  buildPayoutUpdateEmail,
+  buildRankChangeEmail,
+  type ProcessingEmailParams,
+  type ShippedEmailParams,
+  type DeliveredEmailParams,
+  type LowStockDigestParams,
+  type PartnerWelcomeParams,
+  type TeamJoinParams,
+  type CommissionEarnedParams,
+  type PayoutUpdateParams,
+  type RankChangeParams,
+} from "./templates"

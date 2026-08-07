@@ -12,8 +12,8 @@ importers:
         specifier: ^5.4.0
         version: 5.4.0(react-hook-form@7.81.0(react@19.2.0))
       '@hygienhub/order-emails':
-        specifier: file:../hygienhub-store/packages/order-emails
-        version: file:../hygienhub-store/packages/order-emails(@supabase/supabase-js@2.106.2)
+        specifier: file:./packages/order-emails
+        version: file:packages/order-emails(@supabase/supabase-js@2.106.2)
       '@radix-ui/react-accordion':
         specifier: 1.2.2
         version: 1.2.2(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -480,8 +480,8 @@ packages:
     peerDependencies:
       react-hook-form: ^7.55.0
 
-  '@hygienhub/order-emails@file:../hygienhub-store/packages/order-emails':
-    resolution: {directory: ../hygienhub-store/packages/order-emails, type: directory}
+  '@hygienhub/order-emails@file:packages/order-emails':
+    resolution: {directory: packages/order-emails, type: directory}
     peerDependencies:
       '@supabase/supabase-js': '>=2'
 
@@ -3226,7 +3226,7 @@ snapshots:
       '@standard-schema/utils': 0.3.0
       react-hook-form: 7.81.0(react@19.2.0)
 
-  '@hygienhub/order-emails@file:../hygienhub-store/packages/order-emails(@supabase/supabase-js@2.106.2)':
+  '@hygienhub/order-emails@file:packages/order-emails(@supabase/supabase-js@2.106.2)':
     dependencies:
       '@supabase/supabase-js': 2.106.2
 
