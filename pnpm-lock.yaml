@@ -4,10 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  lodash: ^4.18.1
-  lodash-es: ^4.18.1
-
 importers:
 
   .:
@@ -17,7 +13,7 @@ importers:
         version: 5.4.0(react-hook-form@7.81.0(react@19.2.0))
       '@hygienhub/order-emails':
         specifier: file:../hygienhub-store/packages/order-emails
-        version: file:../hygienhub-store/packages/order-emails
+        version: file:../hygienhub-store/packages/order-emails(@supabase/supabase-js@2.106.2)
       '@radix-ui/react-accordion':
         specifier: 1.2.2
         version: 1.2.2(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -486,6 +482,8 @@ packages:
 
   '@hygienhub/order-emails@file:../hygienhub-store/packages/order-emails':
     resolution: {directory: ../hygienhub-store/packages/order-emails, type: directory}
+    peerDependencies:
+      '@supabase/supabase-js': '>=2'
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -3228,7 +3226,9 @@ snapshots:
       '@standard-schema/utils': 0.3.0
       react-hook-form: 7.81.0(react@19.2.0)
 
-  '@hygienhub/order-emails@file:../hygienhub-store/packages/order-emails': {}
+  '@hygienhub/order-emails@file:../hygienhub-store/packages/order-emails(@supabase/supabase-js@2.106.2)':
+    dependencies:
+      '@supabase/supabase-js': 2.106.2
 
   '@img/colour@1.1.0':
     optional: true
