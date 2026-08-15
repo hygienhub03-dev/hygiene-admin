@@ -30,7 +30,6 @@ const navItems = [
   { label: "Reports", href: "/reports" },
   { label: "Orders", href: "/orders" },
   { label: "Network", href: "/network" },
-  { label: "Settings", href: "/settings" },
 ]
 
 interface LowStockSummary {
