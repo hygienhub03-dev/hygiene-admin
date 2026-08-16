@@ -58,7 +58,7 @@ async function handle(req: NextRequest) {
   } catch (error: any) {
     console.error("[cron/low-stock-digest]", error)
     return NextResponse.json(
-      { success: false, message: error?.message ?? "Digest failed" },
+      { success: false, message: "Internal server error" },
       { status: 500 },
     )
   }

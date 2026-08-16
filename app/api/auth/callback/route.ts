@@ -7,6 +7,9 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code');
   const next = searchParams.get('next') ?? '/';
 
+  // Prevent open redirect: only allow relative paths starting with /
+  const safeNext = next.startsWith('/') && !next.startsWith('//') ? next : '/';
+
   if (code) {
     const cookieStore = await cookies();
     const supabase = createServerClient(
@@ -20,7 +23,13 @@ export async function GET(request: NextRequest) {
           setAll(cookiesToSet) {
             try {
               cookiesToSet.forEach(({ name, value, options }) => {
-                cookieStore.set(name, value, options);
+                cookieStore.set(name, value, {
+                  ...options,
+                  sameSite: 'lax',
+                  httpOnly: true,
+                  secure: process.env.NODE_ENV === 'production',
+                  path: '/',
+                });
               });
             } catch {
               // Server components cannot set cookies
@@ -32,7 +41,7 @@ export async function GET(request: NextRequest) {
 
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`);
+      return NextResponse.redirect(`${origin}${safeNext}`);
     }
   }
 

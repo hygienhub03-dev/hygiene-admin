@@ -130,58 +130,44 @@ export async function commitOrderInventory(
   const adjusted: StockAdjustment[] = []
   const lowStock: LowStockProduct[] = []
 
+  // Use atomic RPC for each item to prevent lost-update race conditions.
+  // The decrement_stock RPC locks the product row (FOR UPDATE), checks stock,
+  // and decrements atomically — no read-calculate-write in application code.
   for (const item of items) {
     if (!item.product_id || !item.quantity || item.quantity <= 0) continue
 
     try {
-      const { data: product, error: fetchError } = await supabase
+      // Read product info for low-stock detection (stock is updated by the RPC)
+      const { data: productBefore } = await supabase
         .from("products")
         .select("id, name, stock")
         .eq("id", item.product_id)
         .single()
 
-      if (fetchError || !product) {
+      const previousStock = Number(productBefore?.stock ?? 0)
+      const previousLevel = classifyStock(previousStock, threshold)
+
+      const { data: rpcResult, error: rpcError } = await supabase.rpc("decrement_stock", {
+        p_product_id: item.product_id,
+        p_quantity: item.quantity,
+        p_order_id: orderId,
+        p_reason: reason,
+      })
+
+      if (rpcError) {
         console.error(
-          `[inventory] product ${item.product_id} not found for order ${orderId}`,
-          fetchError,
+          `[inventory] failed to decrement stock for ${item.product_id}`,
+          rpcError,
         )
         continue
       }
 
-      const previousStock = Number(product.stock ?? 0)
-      const newStock = Math.max(0, previousStock - item.quantity)
-      const previousLevel = classifyStock(previousStock, threshold)
+      const newStock = Number(rpcResult?.new_stock ?? 0)
       const newLevel = classifyStock(newStock, threshold)
       const becameLow =
         previousLevel === "ok" && (newLevel === "low" || newLevel === "out_of_stock")
 
-      const { error: updateError } = await supabase
-        .from("products")
-        .update({ stock: newStock })
-        .eq("id", item.product_id)
-
-      if (updateError) {
-        console.error(
-          `[inventory] failed to update stock for ${item.product_id}`,
-          updateError,
-        )
-        continue
-      }
-
-      try {
-        await supabase.from("inventory_movements").insert({
-          product_id: item.product_id,
-          order_id: orderId,
-          quantity: -item.quantity,
-          previous_stock: previousStock,
-          new_stock: newStock,
-          reason,
-        })
-      } catch (err) {
-        console.warn("[inventory] inventory_movements insert skipped", err)
-      }
-
-      const title = String(product.name ?? item.product_name ?? "Product")
+      const title = String(productBefore?.name ?? item.product_name ?? "Product")
       adjusted.push({
         productId: item.product_id,
         title,

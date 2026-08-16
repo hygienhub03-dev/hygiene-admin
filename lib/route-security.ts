@@ -1,5 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
 
+// Upstash Redis rate limiter (distributed, works on serverless)
+// Falls back to in-memory Map for local dev when UPSTASH env vars are missing
+const useUpstash = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN;
+
+const upstashRatelimit = useUpstash
+  ? new Ratelimit({
+      redis: Redis.fromEnv(),
+      limiter: Ratelimit.slidingWindow(60, "60 s"),
+      analytics: true,
+      prefix: "hygiene_admin",
+    })
+  : null;
+
+// In-memory fallback for local dev only
 type Bucket = { count: number; resetAt: number };
 const buckets = new Map<string, Bucket>();
 
@@ -9,14 +25,36 @@ function getIp(request: NextRequest) {
   return request.headers.get("x-real-ip") || "unknown";
 }
 
-export function enforceRateLimit(
+export async function enforceRateLimit(
   request: NextRequest,
   keyPrefix: string,
   limit = 60,
   windowMs = 60_000,
 ) {
+  const ip = getIp(request);
+  const key = `${keyPrefix}:${ip}`;
+
+  // Use Upstash in production
+  if (upstashRatelimit) {
+    const { success, limit: rlLimit, remaining, reset } = await upstashRatelimit.limit(key);
+    if (!success) {
+      return NextResponse.json(
+        { success: false, message: "Too many requests" },
+        {
+          status: 429,
+          headers: {
+            "X-RateLimit-Limit": String(rlLimit),
+            "X-RateLimit-Remaining": String(remaining),
+            "X-RateLimit-Reset": String(reset),
+          },
+        },
+      );
+    }
+    return null;
+  }
+
+  // In-memory fallback for local dev
   const now = Date.now();
-  const key = `${keyPrefix}:${getIp(request)}`;
   const current = buckets.get(key);
 
   if (!current || current.resetAt <= now) {

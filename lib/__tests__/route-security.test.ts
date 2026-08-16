@@ -8,35 +8,35 @@ function makeRequest(url: string, headers: Record<string, string> = {}) {
 }
 
 describe('enforceRateLimit', () => {
-  it('allows requests under the limit', () => {
+  it('allows requests under the limit', async () => {
     const req = makeRequest('https://admin.example.com/api/orders/1', {
       'x-forwarded-for': '10.0.0.1',
     })
     for (let i = 0; i < 3; i++) {
-      const result = enforceRateLimit(req, 'test-under-limit', 5, 60_000)
+      const result = await enforceRateLimit(req, 'test-under-limit', 5, 60_000)
       assert.equal(result, null)
     }
   })
 
-  it('blocks requests once the limit is exceeded', () => {
+  it('blocks requests once the limit is exceeded', async () => {
     const req = makeRequest('https://admin.example.com/api/orders/1', {
       'x-forwarded-for': '10.0.0.2',
     })
     const keyPrefix = 'test-over-limit'
     for (let i = 0; i < 2; i++) {
-      assert.equal(enforceRateLimit(req, keyPrefix, 2, 60_000), null)
+      assert.equal(await enforceRateLimit(req, keyPrefix, 2, 60_000), null)
     }
-    const blocked = enforceRateLimit(req, keyPrefix, 2, 60_000)
+    const blocked = await enforceRateLimit(req, keyPrefix, 2, 60_000)
     assert.notEqual(blocked, null)
   })
 
-  it('tracks separate IPs independently', () => {
+  it('tracks separate IPs independently', async () => {
     const keyPrefix = 'test-per-ip'
     const reqA = makeRequest('https://admin.example.com/api/orders/1', { 'x-forwarded-for': '10.0.0.3' })
     const reqB = makeRequest('https://admin.example.com/api/orders/1', { 'x-forwarded-for': '10.0.0.4' })
-    assert.equal(enforceRateLimit(reqA, keyPrefix, 1, 60_000), null)
+    assert.equal(await enforceRateLimit(reqA, keyPrefix, 1, 60_000), null)
     // Different IP, same bucket prefix — should not be blocked by A's usage.
-    assert.equal(enforceRateLimit(reqB, keyPrefix, 1, 60_000), null)
+    assert.equal(await enforceRateLimit(reqB, keyPrefix, 1, 60_000), null)
   })
 })
 

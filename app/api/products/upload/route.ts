@@ -5,9 +5,9 @@ import { allowedUploadMime, MAX_UPLOAD_BYTES } from "@/lib/api-validation";
 import { enforceRateLimit } from "@/lib/route-security";
 
 export async function POST(req: NextRequest) {
-  const authError = await requireAdminForApi(req);
+  const { error: authError } = await requireAdminForApi(req);
   if (authError) return authError;
-  const rateLimitError = enforceRateLimit(req, "products:upload", 30, 60_000);
+  const rateLimitError = await enforceRateLimit(req, "products:upload", 30, 60_000);
   if (rateLimitError) return rateLimitError;
 
   try {
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error("[POST /api/products/upload]", error);
     return NextResponse.json(
-      { success: false, message: error?.message ?? "Upload failed" },
+      { success: false, message: "Internal server error" },
       { status: 500 },
     );
   }

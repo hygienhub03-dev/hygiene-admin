@@ -9,19 +9,19 @@ export function extractBearerToken(authorizationHeader: string | null | undefine
   return authorizationHeader?.match(/^Bearer\s+(.+)$/i)?.[1];
 }
 
+export interface AdminAuthResult {
+  error: NextResponse | null;
+  userId: string | null;
+}
+
 /**
- * Verifies the caller is a signed-in admin. Supports two callers:
- *  - The web dashboard, authenticated via cookies (existing behaviour).
- *  - The mobile admin app, which has no cookies and instead sends the
- *    user's Supabase access token as `Authorization: Bearer <token>`.
- *    supabase-js's `getUser(jwt)` validates a token passed explicitly this
- *    way against the Auth server, so this doesn't weaken the cookie path
- *    at all — it's an additional, equally-verified way to identify "who is
- *    calling", which every route using this helper picks up for free.
+ * Verifies the caller is a signed-in admin. Returns:
+ *  - `{ error: NextResponse, userId: null }` on failure (return this from the route)
+ *  - `{ error: null, userId: string }` on success (use userId for audit logs, RPCs)
  */
 export async function requireAdminForApi(
   request: NextRequest,
-): Promise<NextResponse | null> {
+): Promise<AdminAuthResult> {
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
@@ -42,10 +42,13 @@ export async function requireAdminForApi(
     : await supabase.auth.getUser();
 
   if (error || !user) {
-    return NextResponse.json(
-      { success: false, message: "Unauthorised: No active session" },
-      { status: 401 },
-    );
+    return {
+      error: NextResponse.json(
+        { success: false, message: "Unauthorised: No active session" },
+        { status: 401 },
+      ),
+      userId: null,
+    };
   }
 
   const { data: profile } = await supabase
@@ -55,11 +58,14 @@ export async function requireAdminForApi(
     .single();
 
   if (profile?.role !== 'admin') {
-    return NextResponse.json(
-      { success: false, message: "Unauthorised: Admin role required" },
-      { status: 403 },
-    );
+    return {
+      error: NextResponse.json(
+        { success: false, message: "Unauthorised: Admin role required" },
+        { status: 403 },
+      ),
+      userId: null,
+    };
   }
 
-  return null;
+  return { error: null, userId: user.id };
 }

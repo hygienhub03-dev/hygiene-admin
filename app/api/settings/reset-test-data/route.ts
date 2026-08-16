@@ -27,7 +27,7 @@ const TABLES_TO_CLEAR = [
 ];
 
 export async function POST(req: NextRequest) {
-  const authError = await requireAdminForApi(req);
+  const { error: authError } = await requireAdminForApi(req);
   if (authError) return authError;
 
   try {
@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error("[DELETE /api/settings/reset-test-data]", error);
     return NextResponse.json(
-      { success: false, message: error?.message ?? "Failed to clear test data" },
+      { success: false, message: "Internal server error" },
       { status: 500 },
     );
   }

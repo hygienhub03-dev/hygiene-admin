@@ -6,9 +6,9 @@ import { enforceRateLimit } from "@/lib/route-security";
 
 // GET /api/products — list all products
 export async function GET(req: NextRequest) {
-  const authError = await requireAdminForApi(req);
+  const { error: authError } = await requireAdminForApi(req);
   if (authError) return authError;
-  const rateLimitError = enforceRateLimit(req, "products:get", 120, 60_000);
+  const rateLimitError = await enforceRateLimit(req, "products:get", 120, 60_000);
   if (rateLimitError) return rateLimitError;
 
   try {
@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
   } catch (error: any) {
     console.error("[GET /api/products]", error);
     return NextResponse.json(
-      { success: false, message: error?.message ?? "Failed to fetch products" },
+      { success: false, message: "Internal server error" },
       { status: 500 },
     );
   }
@@ -89,9 +89,9 @@ export async function GET(req: NextRequest) {
 
 // POST /api/products — add a new product
 export async function POST(req: NextRequest) {
-  const authError = await requireAdminForApi(req);
+  const { error: authError } = await requireAdminForApi(req);
   if (authError) return authError;
-  const rateLimitError = enforceRateLimit(req, "products:post", 30, 60_000);
+  const rateLimitError = await enforceRateLimit(req, "products:post", 30, 60_000);
   if (rateLimitError) return rateLimitError;
 
   try {
@@ -214,7 +214,7 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error("[POST /api/products]", error);
     return NextResponse.json(
-      { success: false, message: error?.message ?? "Failed to add product" },
+      { success: false, message: "Internal server error" },
       { status: 500 },
     );
   }

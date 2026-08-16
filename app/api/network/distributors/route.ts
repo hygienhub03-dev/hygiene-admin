@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { requireAdminForApi } from '@/lib/admin-auth'
 import { sendEmail, buildRankChangeEmail } from '@hygienhub/order-emails'
+import { auditRankChanged } from '@/lib/services/audit'
 
 export async function GET(req: NextRequest) {
-  const authError = await requireAdminForApi(req)
+  const { error: authError } = await requireAdminForApi(req)
   if (authError) return authError
 
   try {
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: true, data: data ?? [] })
   } catch (error: unknown) {
     return NextResponse.json(
-      { success: false, message: error instanceof Error ? error.message : 'Failed' },
+      { success: false, message: "Internal server error" },
       { status: 500 },
     )
   }
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
 
 /** Update rank and/or status */
 export async function PATCH(req: NextRequest) {
-  const authError = await requireAdminForApi(req)
+  const { error: authError, userId } = await requireAdminForApi(req)
   if (authError) return authError
 
   try {
@@ -88,6 +89,9 @@ export async function PATCH(req: NextRequest) {
     if (error) throw error
 
     if (rank && rank !== previous?.rank) {
+      // Audit log for rank change
+      await auditRankChanged(supabase, id, previous?.rank ?? 'member', rank, userId)
+
       try {
         const { data: authUser } = await supabase.auth.admin.getUserById(id)
         const to = authUser?.user?.email
@@ -109,7 +113,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ success: true, data })
   } catch (error: unknown) {
     return NextResponse.json(
-      { success: false, message: error instanceof Error ? error.message : 'Failed' },
+      { success: false, message: "Internal server error" },
       { status: 500 },
     )
   }

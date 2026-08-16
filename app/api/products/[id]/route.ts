@@ -26,11 +26,11 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const authError = await requireAdminForApi(req);
+  const { error: authError } = await requireAdminForApi(req);
   if (authError) return authError;
   const originError = enforceTrustedOrigin(req);
   if (originError) return originError;
-  const rateLimitError = enforceRateLimit(req, "products:put", 40, 60_000);
+  const rateLimitError = await enforceRateLimit(req, "products:put", 40, 60_000);
   if (rateLimitError) return rateLimitError;
 
   try {
@@ -210,7 +210,7 @@ export async function PUT(
   } catch (error: any) {
     console.error("[PUT /api/products/:id]", error);
     return NextResponse.json(
-      { success: false, message: error?.message ?? "Failed to update product" },
+      { success: false, message: "Internal server error" },
       { status: 500 },
     );
   }
@@ -220,11 +220,11 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const authError = await requireAdminForApi(req);
+  const { error: authError } = await requireAdminForApi(req);
   if (authError) return authError;
   const originError = enforceTrustedOrigin(req);
   if (originError) return originError;
-  const rateLimitError = enforceRateLimit(req, "products:delete", 20, 60_000);
+  const rateLimitError = await enforceRateLimit(req, "products:delete", 20, 60_000);
   if (rateLimitError) return rateLimitError;
 
   try {
@@ -247,7 +247,7 @@ export async function DELETE(
   } catch (error: any) {
     console.error("[DELETE /api/products/:id]", error);
     return NextResponse.json(
-      { success: false, message: error?.message ?? "Failed to delete product" },
+      { success: false, message: "Internal server error" },
       { status: 500 },
     );
   }

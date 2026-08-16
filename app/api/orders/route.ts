@@ -4,7 +4,7 @@ import { requireAdminForApi } from "@/lib/admin-auth";
 import { mapOrder } from "@/lib/services/order-mapper";
 
 export async function GET(req: NextRequest) {
-  const authError = await requireAdminForApi(req);
+  const { error: authError } = await requireAdminForApi(req);
   if (authError) return authError;
   try {
     const supabase = createSupabaseAdminClient();
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: any) {
     return NextResponse.json(
-      { success: false, message: error.message },
+      { success: false, message: "Internal server error" },
       { status: 500 },
     );
   }

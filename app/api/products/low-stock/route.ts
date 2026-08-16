@@ -13,7 +13,7 @@ import {
  * Includes both completely out-of-stock and low-but-not-zero items.
  */
 export async function GET(req: NextRequest) {
-  const authError = await requireAdminForApi(req)
+  const { error: authError } = await requireAdminForApi(req)
   if (authError) return authError
 
   try {
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
   } catch (error: any) {
     console.error("[GET /api/products/low-stock]", error)
     return NextResponse.json(
-      { success: false, message: error?.message ?? "Failed to load low-stock products" },
+      { success: false, message: "Internal server error" },
       { status: 500 },
     )
   }

@@ -9,7 +9,7 @@ import { extractBearerToken } from '@/lib/admin-auth'
  * Body: { token: string, platform?: string }
  */
 export async function POST(req: NextRequest) {
-  const authError = await requireAdminForApi(req)
+  const { error: authError } = await requireAdminForApi(req)
   if (authError) return authError
 
   try {
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
       // Table may not exist yet — surface clear message
       console.error('push register', error)
       return NextResponse.json(
-        { success: false, message: error.message },
+        { success: false, message: 'Internal server error' },
         { status: 500 },
       )
     }
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        message: error instanceof Error ? error.message : 'Failed',
+        message: "Internal server error",
       },
       { status: 500 },
     )

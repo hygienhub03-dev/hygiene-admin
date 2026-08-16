@@ -18,7 +18,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const authError = await requireAdminForApi(request);
+  const { error: authError } = await requireAdminForApi(request);
   if (authError) return authError;
   try {
     const { id } = await params;
@@ -35,7 +35,7 @@ export async function GET(
   } catch (error: any) {
     const status = error.code === "PGRST116" ? 404 : 500;
     return NextResponse.json(
-      { success: false, message: status === 404 ? "Order not found" : error.message },
+      { success: false, message: status === 404 ? "Order not found" : "Internal server error" },
       { status },
     );
   }
@@ -45,7 +45,7 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const authError = await requireAdminForApi(request);
+  const { error: authError } = await requireAdminForApi(request);
   if (authError) return authError;
   try {
     const { id } = await params;
@@ -165,7 +165,7 @@ export async function PUT(
     });
   } catch (error: any) {
     return NextResponse.json(
-      { success: false, message: error.message },
+      { success: false, message: "Internal server error" },
       { status: 500 },
     );
   }

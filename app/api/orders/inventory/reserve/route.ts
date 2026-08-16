@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error("[POST /api/orders/inventory/reserve]", error)
     return NextResponse.json(
-      { success: false, message: error?.message ?? "Failed to reserve inventory" },
+      { success: false, message: "Internal server error" },
       { status: 500 },
     )
   }
