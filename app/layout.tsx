@@ -15,7 +15,6 @@ export const metadata: Metadata = {
   icons: {
     icon: "/hygiene-hub-logo.png",
   },
-  },
 }
 
 export default function RootLayout({
