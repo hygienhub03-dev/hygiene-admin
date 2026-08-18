@@ -5,3 +5,12 @@ node_modules/
 .next/
 .vercel/
 *.tsbuildinfo
+
+# AI / OpenCode
+.opencode/
+AGENTS.md
+.claude/
+.claude
+agents.md
+skills-lock.json
+opencode.json
